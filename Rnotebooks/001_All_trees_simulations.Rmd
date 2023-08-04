@@ -1,0 +1,641 @@
+---
+title: "Data Simulation"
+output: html_notebook
+---
+## Loading Libraries and Functions
+
+
+
+```{r, setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "/Users/oasc/Documents/Thesis/DDD_100K")
+```
+
+```{r libraries,message=FALSE}
+library(DDD)
+library(MLmetrics)
+library(dplyr)
+library(ape)
+library(diversitree)
+library(RPANDA)
+library(latex2exp)
+library(castor)
+library(phangorn)
+library(svMisc)
+library(torch)
+library(igraph)
+library(scales)
+library(extraDistr)
+#library(caret)
+
+
+
+source("R/infer-general-functions.R")#Contains functions for generating the phylogenetic trees ,plotting, computing rates.
+source("R/convert-phylo-to-sumstat.R")#contains the functions to compute the summary statistics of a phylogenetic tree(tips,depth)
+source("R/convert-phylo-to-cblv.R") #contains the function to encode a phylogenetic tree with the "Compact Bijective Ladderized
+source("R/convert-phylo-to-graph.R") #contains the function to encode a phylogenetic tree with the "Compact Bijective Ladderized
+source("R/new_funcs.R")
+
+
+```
+
+```{R,Tree params}
+# Set parameters DDD model simulation
+
+n_trees   <-  10000# number of trees to generate
+ss_check  <- FALSE
+
+```
+
+
+```{R,Parmeters of DDD}
+
+lambda0 <- c(.5, 22.5) # speciation rate
+mu      <- c(0.05,0.5) #  extinction rate
+#k	<-c(10,20)         # carrying Capacity
+k	<-c(20,400)         # carrying Capacity
+crown_age <- 1
+dd_model=1
+
+
+```
+
+
+```{R,Paramters of Bisse and  CBRD }
+
+ # type of the model, either: "crbd" or "bisse"
+n_taxa <- c(20, 1000) # range size 
+
+
+# For the CRBD model
+lambda_range <- c(0.01, 1.0) # speciation rate
+epsilon_range <- c(0.0, 0.9) # turnover rate
+param.range.crbd <- list(
+  "lambda" = lambda_range,
+  "epsilon" = epsilon_range
+)
+
+# For the BiSSE model
+lambda_range <- c(0.01, 1.0) #speciation rate
+q_range <- c(0.01, 0.1) # transition rate
+param.range.bisse <- list(
+  "lambda" = lambda_range,
+  "q" = q_range
+)
+
+
+
+```
+
+
+
+```{r, generate phylo tree}
+
+phylo_name_ddd<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
+
+set.seed(937)
+### DDD Simulation
+start_time <- Sys.time()
+out_phyloddd <- generatePhyloDDD( n_trees,lambda0,mu,k ,age1 = crown_age,ddmodel1=dd_model,ss_check=TRUE)
+end_time <- Sys.time()
+print("Simulation Time for DDD")
+print(end_time - start_time)
+print("=============================")
+
+```
+
+```{R}
+### CRBD Simulation
+start_time <- Sys.time()
+out_crbd <- generatePhylo("crbd", n_trees, n_taxa, param.range.crbd )
+end_time <- Sys.time()
+print("Simulation Time for CRBD")
+print(end_time - start_time)
+print("=============================")
+
+
+### Bisse Simulation
+start_time <- Sys.time()
+out_bisse <- generatePhylo("bisse", n_trees, n_taxa,param.range.bisse)
+end_time <- Sys.time()
+print("Simulation Time for Bisse")
+print(end_time - start_time)
+print("=============================")
+
+
+
+
+
+
+```
+```{R}
+
+##
+saveRDS(out_phyloddd$trees, paste("data_clas/phylogeny-ddd", "-",phylo_name_ddd,".rds", sep=""))
+saveRDS(out_phyloddd$param, paste("data_clas/true-param-ddd", "-",phylo_name_ddd,".rds", sep=""))
+
+saveRDS(out_crbd$trees, paste("data_clas/phylogeny-crbd",n_trees,"ld-01-1-e-0-9.rds", sep=""))
+saveRDS(out_crbd$param, paste("data_clas/true-param-crbd",n_trees,"ld-01-1-e-0-9.rds", sep=""))
+
+saveRDS(out_bisse$trees, paste("data_clas/phylogeny-bisse-ld-.01-1.0-q-.01-.1.rds", sep=""))
+saveRDS(out_bisse$param, paste("data_clas/true-param-bisse-ld-.01-1.0-q-.01-.1.rds", sep=""))
+
+#additional tree info
+#saveRDS(out_phyloddd$tas, paste("data/tas-", model, "-",phylo_name,".rds", sep=""))
+#saveRDS(out_phyloddd$L, paste("data/L-", model, "-",phylo_name,".rds", sep=""))
+saveRDS(out_phyloddd$brts, paste("data_clas/brts-ddd-",phylo_name_ddd,".rds", sep=""))
+
+```
+
+```{R}
+
+### Bisse Simulation
+start_time <- Sys.time()
+out_bisse <- new_generatePhyloBiSSE( n_trees, n_taxa, param.range.bisse )
+end_time <- Sys.time()
+print("Simulation Time for Bisse")
+print(end_time - start_time)
+print("=============================")
+
+saveRDS(out_bisse$trees, paste("data_clas/phylogeny-bisse-ld-.01-1.0-q-.01-.1.rds", sep=""))
+saveRDS(out_bisse$param, paste("data_clas/true-param-bisse-ld-.01-1.0-q-.01-.1.rds", sep=""))
+
+#### Generating Summary Statistics Bisse"
+start_time <- Sys.time()
+sumstat_bisse <- generateSumStatFromPhylo(out_bisse$trees, out_bisse$param) 
+end_time <- Sys.time()
+saveRDS(sumstat_bisse, paste("data_clas/phylogeny-bisse-",n_trees,"ld-.01-1.0-q-.01-.1.rds-sumstat.rds",sep="")) 
+print("Bissee generating Statistics time")
+print(end_time - start_time)
+
+
+
+graph_bisse <- generate_phylogeny_graph(out_bisse$trees)
+saveRDS(graph_bisse, paste("data_clas/phylogeny-bisse",n_trees,"ld-.01-1.0-q-.01-.1.rds-graph.rds",sep="")) 
+
+
+```
+
+
+```{R}
+
+source("R/new_funcs.R")
+### PLD Simulation
+# Set parameters DDD model simulation
+## Factor for unitary trees 15
+n_trees <- 10000# number of trees to generate
+lambda0_pld <- c(0, 50) # speciation rate
+k_pld	<- c(20,400)         # carrying Capacity
+beta_p <-c(-10,10) 
+crown_age_pld <- 1
+set.seed(937)
+start_time <- Sys.time()
+output_pld<-generatePhylo_PLD (n_trees,lambda0_pld,k_pld,beta_p,crown_age_pld,DDD=FALSE
+                             ,ss_check=TRUE,max_tries =5)
+end_time <- Sys.time()
+print("Simulation Time for PLD")
+print(end_time - start_time)
+print("=============================")
+
+phylo_name_pld<-fname_ddd(n_trees,lambda0_pld,lambda0_pld,k_pld,crown_age_pld,10)
+saveRDS(output_pld$trees, paste("data_clas/phylogeny-pld", "-",phylo_name_pld,".rds", sep=""))
+saveRDS(output_pld$param, paste("data_clas/true-param-pld", "-",phylo_name_pld,".rds", sep=""))
+saveRDS(output_pld$brts, paste("data_clas/brts-pld-",phylo_name_pld,".rds", sep=""))
+
+
+start_time <- Sys.time()
+sumstat_pld <- generateSumStatFromPhylo(output_pld$trees, output_pld$param) 
+end_time <- Sys.time()
+saveRDS(sumstat_pld, paste("data_clas/phylogeny-pld","-",phylo_name_pld,"-sumstat.rds",sep="")) 
+print("DDD generating Statistics time")
+print(end_time - start_time)
+
+
+```
+
+```{R}
+
+a<-try(suppressWarnings(emphasis:::sim_tree_pd_cpp(pars = c(20.68464840 ,25.90865751, -0.04462673 ,11.30694211),
+                                            max_t = 1,
+                                            max_lin = 1e+6,
+                                            max_tries = 5)))
+
+a
+
+```
+
+```{R}
+# Create a vector to store the phylo$Node values
+node_values_ddd <- c()
+node_values_crbd <- c()
+node_values_bisse  <- c()
+
+# Iterate over each tree in the list
+for (i in seq_along(out_phyloddd$trees)) {
+  num_nodes <- out_phyloddd$trees[[i]]$Nnode  # Get the Node values for the current tree
+  node_values_ddd <- c(node_values_ddd, num_nodes)  # Append the Node values to the vector
+}
+
+
+# Iterate over each tree in the list
+for (i in seq_along(out_crbd$trees)) {
+  num_nodes <- out_crbd$trees[[i]]$Nnode  # Get the Node values for the current tree
+  node_values_crbd <- c(node_values_crbd, num_nodes)  # Append the Node values to the vector
+}
+
+# Iterate over each tree in the list
+for (i in seq_along(out_bisse$trees)) {
+  num_nodes <- out_bisse$trees[[i]]$Nnode  # Get the Node values for the current tree
+  node_values_bisse <- c(node_values_bisse, num_nodes)  # Append the Node values to the vector
+}
+
+
+# Plot a histogram of node_values
+hist(node_values_ddd, breaks = "FD", main = "Histogram of DDD Node Values", xlab = "Node Values")
+hist(node_values_crbd, breaks = "FD", main = "Histogram of CRBD Node Values", xlab = "Node Values")
+hist(node_values_bisse, breaks = "FD", main = "Histogram of Bisse Node Values", xlab = "Node Values")
+
+
+
+```
+
+
+
+```{r, "Generating Summary Statistics"}
+
+#### Generating Summary Statistics DDD"
+start_time <- Sys.time()
+sumstat_ddd <- generateSumStatFromPhylo(out_phyloddd$trees, out_phyloddd$param) 
+end_time <- Sys.time()
+saveRDS(sumstat_ddd, paste("data_clas/phylogeny-DDD","-",phylo_name_ddd,"-sumstat.rds",sep="")) 
+print("DDD generating Statistics time")
+print(end_time - start_time)
+
+
+#### Generating Summary Statistics CRBD"
+start_time <- Sys.time()
+sumstat_crbd <- generateSumStatFromPhylo(out_crbd$trees, out_crbd$param) 
+end_time <- Sys.time()
+saveRDS(sumstat_crbd, paste("data_clas/phylogeny-crbd-",n_trees,"ld-01-1-e-0-9.rds-sumstat.rds",sep="")) 
+print("CRBD generating Statistics time")
+print(end_time - start_time)
+
+
+#### Generating Summary Statistics Bisse"
+start_time <- Sys.time()
+sumstat_bisse <- generateSumStatFromPhylo(out_bisse$trees, out_bisse$param) 
+end_time <- Sys.time()
+saveRDS(sumstat_bisse, paste("data_clas/phylogeny-bisse-",n_trees,"ld-.01-1.0-q-.01-.1.rds-sumstat.rds",sep="")) 
+print("Bissee generating Statistics time")
+print(end_time - start_time)
+
+```
+
+
+
+
+## Generate graph information for Graph Neural Network.
+
+```{r,Graph preprocessing}
+
+
+graph_ddd <- generate_phylogeny_graph(out_phyloddd$trees)
+graph_crbd <- generate_phylogeny_graph(out_crbd$trees)
+graph_bisse <- generate_phylogeny_graph(out_bisse$trees)
+
+
+saveRDS(graph_ddd, paste("data/phylogeny-ddd","-",phylo_name_ddd,"-graph.rds",sep=""))
+saveRDS(graph_crbd, paste("data_clas/phylogeny-crbd",n_trees,"ld-01-1-e-0-9-graph.rds",sep=""))
+saveRDS(graph_bisse, paste("data_clas/phylogeny-bisse",n_trees,"ld-.01-1.0-q-.01-.1.rds-graph.rds",sep="")) 
+
+
+print("Graph info generated")
+
+```
+```{r}
+
+saveRDS(graph_ddd, paste("data/phylogeny-ddd","-",phylo_name_ddd,"-graph.rds",sep=""))
+saveRDS(graph_crbd, paste("data_clas/phylogeny-crbd",n_trees,"ld-01-1-e-0-9-graph.rds",sep=""))
+saveRDS(graph_bisse, paste("data_clas/phylogeny-bisse",n_trees,"ld-.01-1.0-q-.01-.1.rds-graph.rds",sep="")) 
+
+
+
+```
+
+
+```{R,matrix conv}
+
+source("R/convert-phylo-to-cblv.R") #contains the function to encode a phylogenetic tree with the "Compact Bijective Ladderized
+
+max_ddd<-getmax_nodes(out_phyloddd$trees)
+max_crbd<-getmax_nodes(out_crbd$trees)
+max_bisse<-getmax_nodes(out_bisse$trees)
+
+max_nodes<-max(max_ddd,max_crbd,max_bisse)
+
+start_time
+cblv <- generate_encoding_DDD(phylo, tree_size = max_nodes_rounded)
+end_time <- Sys.time()
+print(end_time - start_time)
+
+saveRDS(cblv, paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds", sep=""))
+#additional tree info
+
+
+}else{
+  print(paste("Tree from model: ",model,", already generated. Reading file",sep=""))
+  
+  cblv <- readRDS( paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds",sep=""))
+}
+```
+
+
+```{r}
+
+
+out_phyloddd[[1]]$trees
+## Cargar modelo
+
+
+
+
+
+```
+
+```{r, new func}
+new_generate_ltt_dataframe<-
+function(trees, n_taxa){
+  
+  n_trees  <- length(trees) # number of trees 
+  n_row <- ifelse(length(n_taxa) == 1, n_taxa, n_taxa[2])
+  df.ltt <- data.frame("tree1" = rep(NA, n_row))
+  
+  #df.rates <- as.data.frame(do.call(cbind, true.param))
+  
+  cat("Creating LTT dataframe...\n")
+  
+  for (i in 1:n_trees){
+    tree <- trees[[i]] # get tree 
+    ltt.coord <- ape::ltt.plot.coords(tree) # get ltt coordinates 
+    ltt.coord <- as.data.frame(ltt.coord)
+    ltt.coord.time <- ltt.coord$time
+    n <- length(ltt.coord.time)
+    df.ltt[1:n,paste("tree", i, sep = "")] <- ltt.coord$time
+    progress(i, n_trees, progress.bar = TRUE, init = (i==1))
+  }
+  
+  cat("\nCreating LTT dataframe... Done.")
+  #out <- list("ltt" = df.ltt, "rates" = df.rates)
+  out <- df.ltt # function output
+  
+  return(out)
+  
+}
+
+new_convert_ltt_dataframe_to_dataset<-function(df.ltt, nn_type){
+  
+  if (nn_type == "cnn-ltt"){
+    ds.ltt <- torch::dataset(
+      name <- "ltt_dataset", 
+      initialize = function(df.ltt){
+        
+        # input
+        df.ltt[is.na(df.ltt)] <- 0
+        
+        array.ltt <- df.ltt %>% 
+          as.matrix() %>% 
+          torch_tensor()
+        self$x <- array.ltt
+        
+        # target 
+        # Remove the following line as it references true.param
+        # self$y <- torch_tensor(do.call(cbind, true.param)) # target
+      }, 
+      
+      .getitem = function(i) {list(x = self$x[,i]$unsqueeze(1))},
+      
+      .length = function() {self$x$size()[[2]]}
+  )
+  }
+  
+  else{
+    ds.ltt <- torch::dataset(
+      name <- "ltt_dataset", 
+      initialize = function(df.ltt){
+        
+        # input
+        df.ltt[is.na(df.ltt)] <- 0
+        
+        array.ltt <- df.ltt %>% 
+          as.matrix() %>% 
+          torch_tensor()
+        self$x <- array.ltt
+        
+        # target 
+        # Remove the following line as it references true.param
+        # self$y <- torch_tensor(do.call(cbind, true.param)) # target
+      }, 
+      
+      .getitem = function(i) {list(x = self$x[,i])},
+      
+      .length = function() {self$x$size()[[2]]}
+    )
+  }
+  
+  return(ds.ltt)
+}
+
+```
+
+
+
+```{R}
+
+load("data_clas/test_trees.RData")
+
+
+
+
+```
+
+```{r}
+
+filtered_phylo_list <- Filter(function(tree) {
+  tree$Nnode <  550
+}, test_trees)
+
+
+```
+
+```{r}
+
+#Loading phylo
+
+phylo <- readRDS( "data_clas/phylogeny-ddd-nt-10000-la0-0.5-1.5-mu-0.05-0.5-k-10-100-age-1-ddmod-1.rds")
+
+max_nodes_rounded<-550 #size of the input when trained
+
+#transforming data
+#df.ltt_new<-new_generate_ltt_dataframe(phylo,max_nodes_rounded)
+df.ltt_new<-new_generate_ltt_dataframe(filtered_phylo_list,max_nodes_rounded)
+#ds.ltt <- convert_ltt_dataframe_to_dataset(df.ltt_test, out_phyloddd$param, "cnn-ltt")
+ds.ltt_new <- new_convert_ltt_dataframe_to_dataset(df.ltt_test,  "cnn-ltt")
+
+#test_ds  <- ds.ltt(df.ltt[, test_indices] , extract_elements(true, test_indices))
+ds_eval  <- ds.ltt_new(df.ltt_new)
+
+
+data_loader_ltt <- ds_eval  %>% dataloader(batch_size=1,     shuffle=FALSE)
+
+
+
+
+
+```
+```{R}
+
+# Compute predictions 
+#loading Model
+device<-"cpu"
+cnn_ltt<-torch_load( "NNtest")
+cnn_ltt$eval()
+n_out<-3
+nn.pred <- vector(mode = "list", length = n_out)
+names(nn.pred) <- names(c("lambda0", "mu"    ,  "K" ))
+
+
+coro::loop(for (b in data_loader_ltt) {
+  #if (model_type == "crbd"){b$x <- b$x$unsqueeze(2)}
+  #print(b$x)
+  out <- cnn_ltt(b$x$to(device = device))
+  pred <- as.numeric(out$to(device = "cpu")) # move the tensor to CPU 
+  #true <- as.numeric(b$y)
+  for (i in 1:n_out){nn.pred[[i]] <- c(nn.pred[[i]], pred[i])}
+})
+
+```
+
+
+```{R}
+
+saveRDS(nn.pred, file = "nn_pred.rds")
+
+
+
+```
+
+```{R}
+
+max_nodes_rounded<-500
+
+n_hidden  <- 8
+n_layer   <- 3
+ker_size  <- 5
+p_dropout <- 0.01
+n_input   <- max(max_nodes_rounded)
+n_out     <- 3
+
+# Build the CNN
+
+cnn.net <- nn_module(
+  
+  "corr-cnn",
+  
+  initialize = function(n_input, n_out, n_hidden, n_layer, ker_size, p_dropout) {
+    self$conv1 <- nn_conv1d(in_channels = 1, out_channels = n_hidden, kernel_size = ker_size)
+    self$conv2 <- nn_conv1d(in_channels = n_hidden, out_channels = 2*n_hidden, kernel_size = ker_size)
+    self$conv3 <- nn_conv1d(in_channels = 2*n_hidden, out_channels = 2*2*n_hidden, kernel_size = ker_size)
+    n_flatten <- compute_dim_ouput_flatten_cnn(n_input, n_layer, ker_size)
+    self$fc1 <- nn_linear(in_features = n_flatten * (2*2*n_hidden), out_features = 100)
+    self$fc2 <- nn_linear(in_features = 100, out_features = n_out)
+  },
+  
+  forward = function(x) {
+    
+    print(n_flatten)
+    x %>% 
+      self$conv1() %>%
+      nnf_relu() %>%
+      nnf_dropout(p = p_dropout) %>%
+      nnf_avg_pool1d(2) %>%
+
+      self$conv2() %>%
+      nnf_relu() %>%
+      nnf_dropout(p = p_dropout) %>%
+      nnf_avg_pool1d(2) %>%
+
+      self$conv3() %>%
+      nnf_relu() %>%
+      nnf_dropout(p = p_dropout) %>%
+      nnf_avg_pool1d(2) %>%
+
+      torch_flatten(start_dim = 2) %>%
+      self$fc1() %>%
+      nnf_relu() %>%
+      nnf_dropout(p = p_dropout) %>%
+      
+      self$fc2()
+  }
+)
+
+
+```
+
+
+```{R}
+i<-0
+coro::loop(for (b in data_loader_ltt){
+  i<-i+1
+  
+ a<-  nnf_relu(cnn_ltt$conv1(b$x)) %>% nnf_dropout(p = p_dropout)  %>%  nnf_avg_pool1d(2)%>%
+  
+  
+      cnn_ltt$conv2() %>%
+      nnf_relu() %>%
+      nnf_dropout(p = p_dropout) %>%
+      nnf_avg_pool1d(2) %>%
+  
+      cnn_ltt$conv3() %>%
+      nnf_relu() %>%
+      nnf_dropout(p = p_dropout) %>%
+      nnf_avg_pool1d(2) %>%
+  
+      torch_flatten(start_dim = 2)  
+     #%>%cnn_ltt$fc1()
+ 
+ #print(a)
+
+
+  
+})
+
+
+```
+
+
+```{R}
+
+reverse_compute_dim_input_cnn <- function(output_dim, n_layer, ker_size) {
+  # Calculate the number of elements in the output tensor before flattening
+  output_size <- sqrt(output_dim / n_layer)
+  
+  # Undo the effects of each convolutional layer
+  for (i in 1:n_layer) {
+    output_size <- output_size + ker_size - 1
+  }
+  
+  # The final output_size is the n_input size
+  n_input <- output_size^2
+  
+  return(n_input)
+}
+
+```
+
+
+```{R}
+
+reverse_compute_dim_input_cnn(352,3,5)
+
+
+```
+

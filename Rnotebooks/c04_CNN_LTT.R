@@ -2,6 +2,11 @@
 
 library(torch)
 library(luz)
+library(torch)
+library(svMisc)
+library(torch)
+library(dplyr)
+library(caret)
 source("R/neural-network-functions.R")
 source("R/infer-general-functions.R")
 source("R/convert-phylo-to-cblv.R")
@@ -17,17 +22,11 @@ device <- "cpu"
 nn_type <- "cnn-ltt"
 max_nodes_rounded<-1200
 n_mods<-4
+generateltt<-FALSE
+
 
 
 ###Reading LTT
-  
-phylo_crbd <- readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9.rds", sep=""))
-phylo_bisse <- readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1.rds", sep=""))
-phylo_ddd <- readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-phylo_pld <- readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-
-phylo<-c(phylo_crbd,phylo_bisse,phylo_ddd,phylo_pld)
-
 
 
 
@@ -55,16 +54,42 @@ true_pld   <-   list("crbd"  = rep(1, n_trees),
 
 true_names<-names(true_crbd)
 
-
 true <- lapply(1:4, function(i) c(true_crbd[[i]], true_bisse[[i]], true_ddd[[i]], true_pld[[i]]))
 names(true)<-true_names
 
 
+if (generateltt==TRUE){
+  
+phylo_crbd <- readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9.rds", sep=""))
+phylo_bisse <- readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1.rds", sep=""))
+phylo_ddd <- readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
+phylo_pld <- readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
+ 
+phylo<-c(phylo_crbd,phylo_bisse,phylo_ddd,phylo_pld)
+
+
 start_time <- Sys.time()
 
-df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$ltt
+df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$
+  
+  
+saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt.rds", sep=""))  
+
 end_time <- Sys.time()
 print(end_time - start_time)
+
+rm(phylo)
+rm(phylo_crbd)
+rm(phylo_bisse)
+rm(phylo_ddd)
+rm(phylo_pld)
+
+}else{
+  
+  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt.rds", sep=""))
+  
+}
+
 
 
 # Parameters of the NN's training
@@ -76,7 +101,7 @@ subset_size <- 10000  # Specify the size of the subset
 n_train    <- floor(subset_size * .9)
 n_valid    <- floor(subset_size * .05)
 n_test     <- subset_size - n_train - n_valid
-batch_size <- 128
+batch_size <- 64
 
 # Pick the phylogenies randomly.
 ds.ltt <- convert_ltt_dataframe_to_dataset(df.ltt, true, nn_type)
@@ -115,7 +140,7 @@ valid_dl <- valid_ds %>% dataloader(batch_size=batch_size, shuffle=FALSE)
 test_dl  <- test_ds  %>% dataloader(batch_size=1,          shuffle=FALSE)
 
 
-n_hidden  <- 8
+n_hidden  <- 16
 n_layer   <- 3
 ker_size  <- 5
 p_dropout <- 0.01
@@ -185,13 +210,7 @@ train_batch <- function(b){
   loss$item()
   
   
-  # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
-  total <- length(max_indices1)
-  
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+
 }
 
 valid_batch <- function(b) {
@@ -202,13 +221,15 @@ valid_batch <- function(b) {
   loss$item()
   
   
-  # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
 }
 
 
@@ -291,7 +312,7 @@ print(end_time - start_time)
 time_cnnltt<-end_time - start_time
 
 
-png("loss_curve_cnnltt.png")
+png("Plots/loss_curve_cnnltt.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -304,7 +325,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("acc_curve_cnnltt.png")
+png("Plots/acc_curve_cnnltt.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -336,13 +357,22 @@ cnn_ltt$eval()
 pred <- vector(mode = "list", length = n_out)
 names(pred) <-true_names
 
+Pred_total_list<- list("crbd"= vector() , "bisse" = vector() ,"ddd" = vector() , "pld"= vector())
+
+
 acc_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0 ,"total" = 0)
 total_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0, "total"=0)
 
+
+
 # Compute accuracy 
 coro::loop(for (b in test_dl) {
-  output <- cnn_ltt(b$x$to(device = device))
+  output <- cnn_ltt(b$x$to(device = device ))
   target <-  b$y$to(device = device)
+  
+  output<-torch_tensor(output,device = 'cpu')
+  target<-torch_tensor(target,device = 'cpu')
+  
   
   max_indices1 <- apply(output, 1, which.max)
   max_indices2 <- apply(target, 1, which.max)
@@ -351,19 +381,29 @@ coro::loop(for (b in test_dl) {
   
   if(max_indices2==1){
     acc_list$crbd=acc_list$crbd+acc
-    total_list$crbd=total_list$crbd+total}
+    total_list$crbd=total_list$crbd+total
+    Pred_total_list$crbd <-c(Pred_total_list$crbd,max_indices1)
+    
+  }
   
   if(max_indices2==2){
     acc_list$bisse=acc_list$bisse+acc
-    total_list$bisse=total_list$bisse+total}
+    total_list$bisse=total_list$bisse+total
+    Pred_total_list$bisse <-c(Pred_total_list$bisse,max_indices1)
+    
+  }
   
   if(max_indices2==3){
     acc_list$ddd=acc_list$ddd+acc
-    total_list$ddd=total_list$ddd+total}
+    total_list$ddd=total_list$ddd+total
+    Pred_total_list$ddd <-c(Pred_total_list$ddd,max_indices1)
+  }
   
   if(max_indices2==4){
     acc_list$pld=acc_list$pld+acc
-    total_list$pld=total_list$pld+total}
+    total_list$pld=total_list$pld+total
+    Pred_total_list$pld <-c(Pred_total_list$pld,max_indices1)
+  }
   
   
   acc_list$total= acc_list$total+acc
@@ -373,7 +413,10 @@ coro::loop(for (b in test_dl) {
   
 })
 
+
+
 result <- Map("/", acc_list, total_list)
+
 
 # Print the result
 print(result)

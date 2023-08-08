@@ -130,7 +130,7 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1, shuffle=FALSE)
 #### Neural Network Definition(modified for classification problem)
 n_in      <- length(train_ds[1]$x) # number of neurons of the input layer 
 n_out     <- num_mods # number of classes
-n_hidden  <- 50 # number of neurons in the hidden layers 
+n_hidden  <- 500 # number of neurons in the hidden layers 
 p_dropout <- 0.01 # dropout probability 
 n_epochs  <- 100 # maximum number of epochs for the training 
 patience  <- 5 # patience of the early stopping 
@@ -180,7 +180,7 @@ build_dnn <- function(n_in, n_hidden, n_out, num_hidden_layers, p_dropout) {
 
 
 # Set up the neural network with the desired number of hidden layers.
-num_hidden_layers <- 5
+num_hidden_layers <- 10
 dnn <- build_dnn(n_in = n_in, n_hidden = n_hidden, n_out = n_out, 
                  num_hidden_layers = num_hidden_layers, p_dropout = p_dropout)
 
@@ -188,8 +188,10 @@ dnn <- build_dnn(n_in = n_in, n_hidden = n_hidden, n_out = n_out,
 dnn$to(device = device)
 #opt <- optim_adam(params = dnn$parameters)
 
+
 learning_rate <- 0.01
 opt <- optim_adam(params = dnn$parameters)
+#opt <- optim_sgd(params = dnn$parameters,lr = 0.001, momentum = 0.9)
 
 ## Batch functions 
 train_batch <- function(b){
@@ -444,6 +446,20 @@ print(result)
 
 write.csv(result, file = "Testing_results/dnn_500_10.csv", row.names = FALSE)
 
+
+
+# Plot histograms
+par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
+
+categories <- c("crbd", "bisse", "ddd", "pld")
+
+for (category in categories) {
+  hist(Pred_total_list[[category]],
+       main = paste("Histogram for", category),
+       xlab = "Prediction",
+       xlim = c(-0.5, 4.5),  # Adjust xlim to center bars
+       breaks = -0.5:4.5)   # Adjust breaks to center bars
+}
 
 
 

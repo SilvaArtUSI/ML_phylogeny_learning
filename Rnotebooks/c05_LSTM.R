@@ -27,16 +27,9 @@ nn_type <- "rnn-ltt" # type of the model: Recurrent Neural Network w/ LTT
 max_nodes_rounded<-1200
 min_nodes_rounded<-1
 n_mods<-4
+generateltt<-FALSE
 
 
-###Reading LTT
-
-phylo_crbd <- readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9.rds", sep=""))
-phylo_bisse <- readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1.rds", sep=""))
-phylo_ddd <- readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-phylo_pld <- readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-
-phylo<-c(phylo_crbd,phylo_bisse,phylo_ddd,phylo_pld)
 
 
 
@@ -65,27 +58,42 @@ true_pld   <-   list("crbd"  = rep(1, n_trees),
 
 true_names<-names(true_crbd)
 
-
 true <- lapply(1:4, function(i) c(true_crbd[[i]], true_bisse[[i]], true_ddd[[i]], true_pld[[i]]))
 names(true)<-true_names
 
 
+if (generateltt==TRUE){
+  
+  phylo_crbd <- readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9.rds", sep=""))
+  phylo_bisse <- readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1.rds", sep=""))
+  phylo_ddd <- readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
+  phylo_pld <- readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
+  
+  phylo<-c(phylo_crbd,phylo_bisse,phylo_ddd,phylo_pld)
+  
+  
+  start_time <- Sys.time()
+  
+  df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$
+    
+    
+    saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt.rds", sep=""))  
+  
+  end_time <- Sys.time()
+  print(end_time - start_time)
+  
+  rm(phylo)
+  rm(phylo_crbd)
+  rm(phylo_bisse)
+  rm(phylo_ddd)
+  rm(phylo_pld)
+  
+}else{
+  
+  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt.rds", sep=""))
+  
+}
 
-
-start_time <- Sys.time()
-
-df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$ltt
-end_time <- Sys.time()
-print(end_time - start_time)
-
-rm(phylo)
-rm(phylo_crbd)
-rm(phylo_bisse)
-rm(phylo_ddd)
-rm(phylo_pld)
-
-
-saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt.rds", sep=""))
 
 
 set.seed(113)
@@ -209,12 +217,15 @@ train_batch <- function(b){
   loss$item()
   
   # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
   
 }
 
@@ -227,12 +238,15 @@ valid_batch <- function(b) {
   loss$item()
   
   # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
   
 }
 
@@ -344,21 +358,16 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
        col = c("blue", "red"), lty = 1)
 
 
-```
-```{r,Storing the Model}
-
 torch_save(rnn, paste( "M05_LSTM-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"p",patience,sep="-"))
 cat(paste("\n Model cnn ltt saved", sep = ""))
 cat("\nSaving model... Done.")
 
 rnn<-torch_load( paste( "M06_LSTM-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"p",patience,sep="-"))
 
-```
-```{r}
 rnn<-torch_load( paste( "M05_LSTM-DDD-K",k[1],k[2],subset_size,"Lay",n_layer,"Hn",n_hidden,"p",patience,sep="-"))
 rnn$to(device =device  )
 
-```
+
 
 # Evaluation of the predictions of the RNN w/ test set
 
@@ -397,100 +406,7 @@ if (length(n_taxa) == 1) {
 
     
     
-    
-  })
 
-
-
-# Prepare plot
-```{R}
-# Prepare plot 
-par(mfrow = c(1, 3))
-
-plot(true[[1]][test_indices], nn.pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
-
-plot(true[[2]][test_indices], nn.pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
-
-plot(true[[3]][test_indices] * 100, nn.pred[[3]] * 100, main = "K", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
-```
-
-
-
-
-```{R,computing RMSE}
-
-mse_l <- list()
-
-for (i in 1:length(true))
-{
-  mse<- sqrt(mean((true[[i]][test_indices]-nn.pred[[i]])^2))/mean(true[[i]][test_indices])
-  mse_l<-c(mse_l, mse)
-}
-
-names(mse_l) <- names(true)
-
-mse_l
-
-
-
-```
-
-
-
-```{R,NRME against bucket, Only on testing}
-
-
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
-phylo <- readRDS( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep=""))
-
-# Get the Nnode values for each tree
-node_values <- sapply(phylo[test_indices], function(tree) tree$Nnode)
-
-# Group the indices based on the Nnode values
-grouped_indices <- split(seq_along(phylo[test_indices]), node_values)
-
-
-h <- list()
-for( i in 1:length(true)){
-  h[[names(true[i])]] <- list()
-  
-  # Iterate over each group
-  for (j in names(grouped_indices)) {
-    tree_indices <- grouped_indices[[j]]  # Get the tree indices for the current group
-    
-    # Get the values for the current name and tree indices
-    #values <- true[[i]][tree_indices]
-    
-    nrmse <- sqrt(mean((true[[i]][test_indices][tree_indices]-nn.pred[[i]][tree_indices])^2))/mean(true[[i]][test_indices][tree_indices])
-    
-    # Store the values in h
-    h[[i]][[j]] <- nrmse
-    
-  }
-  
-  
-}
-
-for (i in 1:length(h)) {
-  nrmse_values <- unlist(h[[i]])  # Get the NRMSE values for the current h[i]
-  
-  # Create a scatter plot
-  plot(x = as.integer(names(h[[i]])),
-       y = nrmse_values,
-       xlab = "Number of Nodes in Tree",
-       ylab = "NRMSE",
-       main = paste("Scatter Plot of NRMSE -", names(h)[i]))
-}
-
-
-```
-
-
-
-```{R}
 # Example list of lists
 
 
@@ -514,9 +430,3 @@ for (i in seq_along(phylo)) {
 
 # Plot a histogram of node_values
 hist(node_values, breaks = "FD", main = "Histogram of Node Values", xlab = "Node Values")
-
-
-
-
-
-```

@@ -65,7 +65,7 @@ n_train    <- floor(subset_size * .9)
 n_valid    <- floor(subset_size * .05)
 n_test     <- subset_size - n_train - n_valid
 #batch_size <- batch_size <- min(subset_size*.01, 10)
-batch_size <-64
+batch_size <-32
 
 # Pick the phylogenies randomly.
 
@@ -100,7 +100,7 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1, shuffle=FALSE)
 
 
 
-n_hidden <- 8
+n_hidden <- 32
 n_layer  <- 4
 ker_size <- 10
 n_input  <- nrow(cblv_total)
@@ -157,7 +157,9 @@ cnn.net <- nn_module(
 
 cnn <- cnn.net(n_input, n_out, n_hidden, n_layer, ker_size) # create CNN
 cnn$to(device = device) # Move it to the choosen GPU
-opt <- optim_adam(params = cnn$parameters) # optimizer 
+opt <- optim_adam(params = cnn$parameters) # optimizer
+
+best_cnn<- cnn.net(n_input, n_out, n_hidden, n_layer, ker_size) # save best CNN
 
 ## Training 
 
@@ -172,13 +174,16 @@ train_batch <- function(b){
   loss$item()
   
   
-  # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
 }
 
 valid_batch <- function(b) {
@@ -188,13 +193,16 @@ valid_batch <- function(b) {
   loss$item()
   
   
-  # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
+  
 }
 
 # Initialize parameters for the training loop 
@@ -217,6 +225,9 @@ valid_accuracy <- list()
 train_plots <- list()
 valid_plots <- list()
 start_time <-  Sys.time()
+best_epoch<-0
+best_loss<-10000
+
 while (epoch < n_epochs & trigger < patience) {
   
   # Training part 
@@ -254,6 +265,13 @@ while (epoch < n_epochs & trigger < patience) {
     last_loss <- current_loss
   }
   
+  if (current_loss< best_loss){
+    
+    torch_save(cnn, paste( "models/c01_CNN_1st_try2",sep="-"))
+    best_epoch<-epoch
+    
+  }
+  
   # Print Epoch and value of Loss function
   cat(sprintf("epoch %0.3d/%0.3d - valid - loss: %3.5f - accuracy: %3.5f  \n",
               epoch, n_epochs, current_loss,current_accu ))
@@ -271,7 +289,7 @@ time <-end_time - start_time
 
 
 
-png("loss_curve_cnn.png")
+png("Plots/loss_curve_cnn.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -284,7 +302,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("acc_curve_cnn.png")
+png("Plots/acc_curve_cnn.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -299,11 +317,11 @@ dev.off()
 
 
 
-torch_save(cnn, paste( "models/c01_CNN_1st_try",sep="-"))
+torch_save(cnn, paste( "models/c01_CNN_1st_try2",sep="-"))
 cat(paste("\n Model cnn saved", sep = ""))
 cat("\nSaving model... Done.")
 
-cnn<-torch_load( paste( "models/c01_CNN_1st_try",sep="-"))
+cnn<-torch_load( paste( "models/c01_CNN_1st_try2",sep="-"))
 
 cnn$to(device=device)
 
@@ -316,13 +334,22 @@ cnn$eval()
 pred <- vector(mode = "list", length = n_out)
 names(pred) <-true_names
 
+Pred_total_list<- list("crbd"= vector() , "bisse" = vector() ,"ddd" = vector() , "pld"= vector())
+
+
 acc_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0 ,"total" = 0)
 total_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0, "total"=0)
 
+
+
 # Compute accuracy 
 coro::loop(for (b in test_dl) {
-  output <- cnn(b$x$to(device = device))
+  output <- cnn(b$x$to(device = device ))
   target <-  b$y$to(device = device)
+  
+  output<-torch_tensor(output,device = 'cpu')
+  target<-torch_tensor(target,device = 'cpu')
+  
   
   max_indices1 <- apply(output, 1, which.max)
   max_indices2 <- apply(target, 1, which.max)
@@ -331,19 +358,29 @@ coro::loop(for (b in test_dl) {
   
   if(max_indices2==1){
     acc_list$crbd=acc_list$crbd+acc
-    total_list$crbd=total_list$crbd+total}
+    total_list$crbd=total_list$crbd+total
+    Pred_total_list$crbd <-c(Pred_total_list$crbd,max_indices1)
+    
+  }
   
   if(max_indices2==2){
     acc_list$bisse=acc_list$bisse+acc
-    total_list$bisse=total_list$bisse+total}
+    total_list$bisse=total_list$bisse+total
+    Pred_total_list$bisse <-c(Pred_total_list$bisse,max_indices1)
+    
+  }
   
   if(max_indices2==3){
     acc_list$ddd=acc_list$ddd+acc
-    total_list$ddd=total_list$ddd+total}
+    total_list$ddd=total_list$ddd+total
+    Pred_total_list$ddd <-c(Pred_total_list$ddd,max_indices1)
+  }
   
   if(max_indices2==4){
     acc_list$pld=acc_list$pld+acc
-    total_list$pld=total_list$pld+total}
+    total_list$pld=total_list$pld+total
+    Pred_total_list$pld <-c(Pred_total_list$pld,max_indices1)
+  }
   
   
   acc_list$total= acc_list$total+acc
@@ -352,6 +389,7 @@ coro::loop(for (b in test_dl) {
   
   
 })
+
 
 
 result <- Map("/", acc_list, total_list)
@@ -363,91 +401,24 @@ print(result)
 
 write.csv(result, file = "Testing_results/cnn.csv", row.names = FALSE)
 
-Now that you have the predicted parameters you can, for instance, 
-plot the predicted value by the neural network vs. the true values.
 
-## Plots Prediction vs Predicted
-```{R, Plots Prediciton vs Predicted}
-# Prepare plot 
-par(mfrow = c(1, 3))
+# Plot histograms
+png("Plots/hist_cnnltt.png")
+par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
 
-plot(true[[1]][test_indices], pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
+categories <- c("crbd", "bisse", "ddd", "pld")
 
-plot(true[[2]][test_indices], pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
-
-plot(true[[3]][test_indices] * 100, pred[[3]] * 100, main = "K", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
-```
-
-```{R,computing RMSE}
-
-mse_l <- list()
-
-for (i in 1:length(true))
-{
-  mse<- sqrt(mean((true[[i]][test_indices]-pred[[i]])^2))/mean(true[[i]][test_indices])
-  mse_l<-c(mse_l, mse)
+for (category in categories) {
+  hist(Pred_total_list[[category]],
+       main = paste("Histogram for", category),
+       xlab = "Prediction",
+       xlim = c(-0.5, 4.5),  # Adjust xlim to center bars
+       breaks = -0.5:4.5)   # Adjust breaks to center bars
 }
 
-names(mse_l) <- names(true)
-
-mse_l
+dev.off()
 
 
-```
 
 
-```{R,NRME against bucket, Only on testing}
 
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
-phylo <- readRDS( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep=""))
-
-# Get the Nnode values for each tree
-node_values <- sapply(phylo[test_indices], function(tree) tree$Nnode)
-
-# Group the indices based on the Nnode values
-grouped_indices <- split(seq_along(phylo[test_indices]), node_values)
-
-
-h <- list()
-for( i in 1:length(true)){
-  h[[names(true[i])]] <- list()
-  
-  # Iterate over each group
-  for (j in names(grouped_indices)) {
-    tree_indices <- grouped_indices[[j]]  # Get the tree indices for the current group
-    
-    # Get the values for the current name and tree indices
-    #values <- true[[i]][tree_indices]
-    
-    nrmse <- sqrt(mean((true[[i]][test_indices][tree_indices]-pred[[i]][tree_indices])^2))/mean(true[[i]][test_indices][tree_indices])
-    
-    # Store the values in h
-    h[[i]][[j]] <- nrmse
-    
-  }
-  
-  
-}
-
-```
-
-
-## Plotting Tree Size vs NRMSE 
-```{R, Plotting NRMSE Tree Size }
-# Scatter plot for each h[i]
-for (i in 1:length(h)) {
-  nrmse_values <- unlist(h[[i]])  # Get the NRMSE values for the current h[i]
-  
-  # Create a scatter plot
-  plot(x = as.integer(names(h[[i]])),
-       y = nrmse_values,
-       xlab = "Number of Nodes in Tree",
-       ylab = "NRMSE",
-       main = paste("Scatter Plot of NRMSE -", names(h)[i]))
-}
-
-
-```

@@ -22,7 +22,7 @@ source("R/new_funcs.R")
 
 n_trees<-10000
 num_mods<-4
-device="cpu"
+device="cuda"
 
 ###Loading Summary Statistics
 ##Rename as necessary
@@ -91,7 +91,7 @@ subset_size <- 40000  # Specify the size of the subset
 n_train    <- floor(subset_size * .9)
 n_valid    <- floor(subset_size * .05)
 n_test     <- subset_size - n_train - n_valid
-batch_size <- min(subset_size*.01, 64)
+batch_size <- 64
 
 
 # Pick the phylogenies randomly.
@@ -130,55 +130,66 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1, shuffle=FALSE)
 #### Neural Network Definition(modified for classification problem)
 n_in      <- length(train_ds[1]$x) # number of neurons of the input layer 
 n_out     <- num_mods # number of classes
-n_hidden  <- 100 # number of neurons in the hidden layers 
+n_hidden  <- 50 # number of neurons in the hidden layers 
 p_dropout <- 0.01 # dropout probability 
 n_epochs  <- 100 # maximum number of epochs for the training 
-patience  <- 10 # patience of the early stopping 
+patience  <- 5 # patience of the early stopping 
+
+
 
 # Build the neural network.
-dnn.net <- nn_module(
+build_dnn <- function(n_in, n_hidden, n_out, num_hidden_layers, p_dropout) {
+  # Initialize the neural network with the specified number of hidden layers.
   
-  "ss-dnn", 
   
-  initialize = function(){
-    self$fc1 <- nn_linear(in_features = n_in, out_features = n_hidden)
-    self$fc2 <- nn_linear(in_features = n_hidden, out_features = n_hidden)
-    self$fc3 <- nn_linear(in_features = n_hidden, out_features = n_hidden)
-    self$fc4 <- nn_linear(in_features = n_hidden, out_features = n_hidden)
-    self$fc5 <- nn_linear(in_features = n_hidden, out_features = n_out)
-  }, 
+  dnn.net <- nn_module(
+    
+    "ss-dnn", 
+    
+    initialize = function(){
+      self$fc_layers <- vector("list", length = num_hidden_layers)
+      for (i in 1:num_hidden_layers) {
+        in_features <- if (i == 1) n_in else n_hidden
+        out_features <- if (i == num_hidden_layers) n_out else n_hidden
+        
+        # Add the linear layers to the module
+        self$fc_layers[[i]] <- nn_linear(in_features = in_features, out_features = out_features)
+        self$add_module(paste0("fc", i), self$fc_layers[[i]])
+      }
+    }, 
+    
+    forward = function(x){
+      for (i in 1:(num_hidden_layers-1)) {
+        x <- x %>%
+          self$fc_layers[[i]]() %>%
+          nnf_relu() %>%
+          nnf_dropout(p = p_dropout)
+      }
+      
+      x<- self$fc_layers[[num_hidden_layers]](x)
+      
+      
+      
+      return(x)
+    }
+  )
   
-  forward = function(x){
-    x %>%
-      self$fc1() %>%
-      nnf_relu() %>%
-      nnf_dropout(p = p_dropout) %>%
-      
-      self$fc2() %>%
-      nnf_relu() %>%
-      nnf_dropout(p = p_dropout) %>%
-      
-      self$fc3() %>%
-      nnf_relu() %>%
-      nnf_dropout(p = p_dropout) %>%
-      
-      self$fc4() %>%
-      nnf_relu() %>%
-      nnf_dropout(p = p_dropout) %>%
-      self$fc5()
-  }
-)
-
-# Set up the neural network.
-dnn <- dnn.net() # create CNN
-dnn$to(device = device) # Move it to the choosen GPU
-opt <- optim_adam(params = dnn$parameters) # optimizer
+  return(dnn.net())
+}
 
 
 
+# Set up the neural network with the desired number of hidden layers.
+num_hidden_layers <- 5
+dnn <- build_dnn(n_in = n_in, n_hidden = n_hidden, n_out = n_out, 
+                 num_hidden_layers = num_hidden_layers, p_dropout = p_dropout)
 
+# Move the model to the chosen device and set up the optimizer.
+dnn$to(device = device)
+#opt <- optim_adam(params = dnn$parameters)
 
-
+learning_rate <- 0.01
+opt <- optim_adam(params = dnn$parameters)
 
 ## Batch functions 
 train_batch <- function(b){
@@ -193,12 +204,22 @@ train_batch <- function(b){
   loss$item()
   
   # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  # max_indices1 <- apply(output, 1, which.max)
+  # max_indices2 <- apply(target, 1, which.max)
+  # acc <- sum(max_indices1 == max_indices2)
+  # total <- length(max_indices1)
+  
+  #print(output)
+  
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
 
 
   
@@ -213,12 +234,20 @@ valid_batch <- function(b) {
   loss$item()
   
   # Compute accuracy
-  max_indices1 <- apply(output, 1, which.max)
-  max_indices2 <- apply(target, 1, which.max)
-  acc <- sum(max_indices1 == max_indices2)
+  # max_indices1 <- apply(output, 1, which.max)
+  # max_indices2 <- apply(target, 1, which.max)
+  # acc <- sum(max_indices1 == max_indices2)
+  # total <- length(max_indices1)
+  
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
   total <- length(max_indices1)
   
-  return(list(loss = loss$item(), accuracy = acc, total = total))
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
 }
 
 #### Training 
@@ -243,7 +272,6 @@ valid_plots <- list()
 start_time <-  Sys.time()
 while (epoch < n_epochs & trigger < patience) {
   
-  train_start<-Sys.time()
   # Training 
   dnn$train()
   train_loss <- c()
@@ -256,12 +284,10 @@ while (epoch < n_epochs & trigger < patience) {
   
   mean_tl<-mean(train_loss)
   mean_ta<-mean(train_accu)
-  train_finish <-  Sys.time()
   
   # Print Epoch and value of Loss function 
   cat(sprintf("epoch %0.3d/%0.3d - train - loss: %3.5f - accuracy: %3.5f \n",
               epoch, n_epochs, mean_tl, mean_ta))
-  print(train_finish-train_start)
   
   # Validation 
   dnn$eval()
@@ -304,7 +330,7 @@ print(end_time - start_time)
 ####Plots
 
 
-png("loss_curve.png")
+png("Plots/loss_curve_100_10_2.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -317,7 +343,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("acc_curve.png")
+png("Plots/acc_curve_100_10_2.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -338,42 +364,35 @@ dev.off()
 #       col = c("blue", "red"), lty = 1)
 
 
-torch_save(dnn, paste( "models/c01_DNN_1st_try",sep="-"))
+torch_save(dnn, paste( "models/c01_DNN_1st_500n10",sep="-"))
 cat(paste("\n Model dnn saved", sep = ""))
 cat("\nSaving model... Done.")
 
-dnn<-torch_load(paste( "models/c01_DNN_1st_try",sep="-"))
+
+device <- 'cuda'
+dnn<-torch_load(paste( "models/c01_DNN_1st_500n10",sep="-"),device = device)
+
 
 
 dnn$eval()
 pred <- vector(mode = "list", length = n_out)
 names(pred)<-target_var
 
-# Computing accuracy on test 
-
-acc_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0)
-total_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0)
-
-
-
-coro::loop(for (b in test_dl) {
-
-  
-  
-  
-})
-
-
-
-
 
 acc_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0 ,"total" = 0)
 total_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0, "total"=0)
 
+Pred_total_list<- list("crbd"= vector() , "bisse" = vector() ,"ddd" = vector() , "pld"= vector())
+
+
 # Compute accuracy 
 coro::loop(for (b in test_dl) {
-  output <- dnn(b$x$to(device = device))
+  output <- dnn(b$x$to(device = device ))
   target <-  b$y$to(device = device)
+  
+  output<-torch_tensor(output,device = 'cpu')
+  target<-torch_tensor(target,device = 'cpu')
+
   
   max_indices1 <- apply(output, 1, which.max)
   max_indices2 <- apply(target, 1, which.max)
@@ -382,19 +401,29 @@ coro::loop(for (b in test_dl) {
   
   if(max_indices2==1){
     acc_list$crbd=acc_list$crbd+acc
-    total_list$crbd=total_list$crbd+total}
+    total_list$crbd=total_list$crbd+total
+    Pred_total_list$crbd <-c(Pred_total_list$crbd,max_indices1)
+    
+    }
   
   if(max_indices2==2){
     acc_list$bisse=acc_list$bisse+acc
-    total_list$bisse=total_list$bisse+total}
+    total_list$bisse=total_list$bisse+total
+    Pred_total_list$bisse <-c(Pred_total_list$bisse,max_indices1)
+    
+    }
   
   if(max_indices2==3){
     acc_list$ddd=acc_list$ddd+acc
-    total_list$ddd=total_list$ddd+total}
+    total_list$ddd=total_list$ddd+total
+    Pred_total_list$ddd <-c(Pred_total_list$ddd,max_indices1)
+    }
   
   if(max_indices2==4){
     acc_list$pld=acc_list$pld+acc
-    total_list$pld=total_list$pld+total}
+    total_list$pld=total_list$pld+total
+    Pred_total_list$pld <-c(Pred_total_list$pld,max_indices1)
+    }
   
   
   acc_list$total= acc_list$total+acc
@@ -407,12 +436,13 @@ coro::loop(for (b in test_dl) {
 
 result <- Map("/", acc_list, total_list)
 
+
 # Print the result
 print(result)
 #print("Accuray total Testing")
 #print(sum(unlist(acc_list))/sum(unlist(total_list)))
 
-write.csv(result, file = "Testing_results/dnn.csv", row.names = FALSE)
+write.csv(result, file = "Testing_results/dnn_500_10.csv", row.names = FALSE)
 
 
 

@@ -18,7 +18,7 @@ source("R/new_funcs.R")
 max_nodes_rounded<-1200 #computed in previous codes
 n_trees<-10000
 n_mods<-4
-device<-"cpu"
+device<-"cuda"
 
 
 
@@ -208,7 +208,7 @@ valid_batch <- function(b) {
 # Initialize parameters for the training loop 
 epoch <- 1
 trigger <- 0
-patience <- 10
+patience <- 5
 n_epochs <- 100
 last_loss <- 100
 
@@ -269,6 +269,7 @@ while (epoch < n_epochs & trigger < patience) {
     
     torch_save(cnn, paste( "models/c01_CNN_1st_try2",sep="-"))
     best_epoch<-epoch
+    best_loss<-current_loss
     
   }
   
@@ -289,7 +290,7 @@ time <-end_time - start_time
 
 
 
-png("Plots/loss_curve_cnn.png")
+png("Plots/loss_curve_cnn2.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -302,7 +303,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("Plots/acc_curve_cnn.png")
+png("Plots/acc_curve_cnn2.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -315,11 +316,6 @@ legend("topright", legend = c("Training Accuracy", "Validation Accuracy"),
 dev.off()
 
 
-
-
-torch_save(cnn, paste( "models/c01_CNN_1st_try2",sep="-"))
-cat(paste("\n Model cnn saved", sep = ""))
-cat("\nSaving model... Done.")
 
 cnn<-torch_load( paste( "models/c01_CNN_1st_try2",sep="-"))
 
@@ -399,11 +395,11 @@ print(result)
 #print("Accuray total Testing")
 #print(sum(unlist(acc_list))/sum(unlist(total_list)))
 
-write.csv(result, file = "Testing_results/cnn.csv", row.names = FALSE)
+write.csv(result, file = "Testing_results/cnn2.csv", row.names = FALSE)
 
 
 # Plot histograms
-png("Plots/hist_cnnltt.png")
+png("Plots/hist_cnn2.png")
 par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
 
 categories <- c("crbd", "bisse", "ddd", "pld")

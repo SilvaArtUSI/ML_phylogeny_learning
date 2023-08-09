@@ -18,7 +18,7 @@ source("R/new_funcs.R")
 
 
 n_trees <- 10000# number of trees to generate
-device <- "cpu"
+device <- "cuda"
 nn_type <- "cnn-ltt"
 max_nodes_rounded<-1200
 n_mods<-4
@@ -209,6 +209,16 @@ train_batch <- function(b){
   opt$step()
   loss$item()
   
+  max_indices1 <- torch_argmax(output, dim = 2,keepdim =FALSE)  # Find the predicted class labels
+  max_indices2 <- torch_argmax(target, dim = 2, keepdim =FALSE)  # Find the true class labels
+  
+  #print(max_indices1)
+  
+  acc <- torch_sum(max_indices1 == max_indices2)
+  total <- length(max_indices1)
+  
+  return(list(loss = loss$item(), accuracy = acc$item(), total = total))
+  
   
 
 }
@@ -240,6 +250,9 @@ trigger   <- 0
 last_loss <- 100
 n_epochs<-100
 patience<-10
+best_loss<-10000
+best_epoch<-0
+
 
 
 # Training loop 
@@ -290,6 +303,13 @@ while (epoch < n_epochs & trigger < patience) {
     trigger   <- 0
     last_loss <- current_loss
   }
+  if (current_loss< best_loss){
+    
+    torch_save(cnn_ltt, paste( "models/CNNLTT_FIRST_TRy2",sep="-"))
+    best_epoch<-epoch
+    best_loss<-current_loss
+    
+  }
   
   # Print Epoch and value of Loss function
   cat(sprintf("epoch %0.3d/%0.3d - valid - loss: %3.5f - accuracy: %3.5f  \n",
@@ -338,14 +358,6 @@ legend("topright", legend = c("Training Accuracy", "Validation Accuracy"),
 dev.off()
 
 
-
-
-
-torch_save(cnn_ltt, paste( "models/CNNLTT_FIRST_TRy",patience,sep="-"))
-cat(paste("\n Model cnn ltt saved", sep = ""))
-cat("\nSaving model... Done.")
-
-cnn_ltt<-torch_load( paste( "models/CNNLTT_FIRST_TRy",patience,sep="-"))
 
 
 
@@ -418,6 +430,11 @@ coro::loop(for (b in test_dl) {
 result <- Map("/", acc_list, total_list)
 
 
+result$timemin <- as.numeric(time_cnnltt)
+result$best_epoch<-best_epoch
+result$epoch<-epoch
+
+
 # Print the result
 print(result)
 
@@ -426,6 +443,24 @@ print(result)
 
 
 write.csv(result, file = "Testing_results/cnnltt.csv", row.names = FALSE)
+
+
+# Plot histograms
+png("Plots/hist_cnnltt2.png")
+par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
+
+categories <- c("crbd", "bisse", "ddd", "pld")
+
+for (category in categories) {
+  hist(Pred_total_list[[category]],
+       main = paste("Histogram for", category),
+       xlab = "Prediction",
+       xlim = c(-0.5, 4.5),  # Adjust xlim to center bars
+       breaks = -0.5:4.5)   # Adjust breaks to center bars
+}
+
+dev.off()
+
 
 
 

@@ -19,7 +19,7 @@ n_trees <- 10000# number of trees to generate
 
 dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter K (= diversity where speciation = extinction)
 
-device <- "cpu" # GPU where to run computations 
+device <- "cuda" # GPU where to run computations 
 nn_type <- "rnn-ltt" # type of the model: Recurrent Neural Network w/ LTT
 
 
@@ -259,6 +259,8 @@ n_epochs<-100
 trigger   <- 0 
 
 last_loss <- 100
+best_loss<-10000
+best_epoch<-0
 
 
 
@@ -332,6 +334,14 @@ while (epoch <= n_epochs & trigger < patience) {
     last_loss <- current_loss
   }
   
+  if (current_loss< best_loss){
+    
+    torch_save(cnn_ltt, paste( "models/LTT_LSTM_TRy2",sep="-"))
+    best_epoch<-epoch
+    best_loss<-current_loss
+    
+  }
+  
   # Print Epoch and value of Loss function
   cat(sprintf("epoch %0.3d/%0.3d - valid - loss: %3.5f - accuracy: %3.5f  \n",
               epoch, n_epochs, current_loss,current_accu ))
@@ -349,6 +359,8 @@ run_timelstm <- end_time - start_time
 print(run_timelstm)
 
 
+
+png("Plots/loss_curve_lstm.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -357,76 +369,122 @@ lines(1:length(valid_losses), valid_losses, type = "l", col = "red")
 legend("topright", legend = c("Training Loss", "Validation Loss"),
        col = c("blue", "red"), lty = 1)
 
+# Close the PNG device
+dev.off()
 
-torch_save(rnn, paste( "M05_LSTM-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"p",patience,sep="-"))
-cat(paste("\n Model cnn ltt saved", sep = ""))
-cat("\nSaving model... Done.")
 
-rnn<-torch_load( paste( "M06_LSTM-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"p",patience,sep="-"))
+png("Plots/acc_curve_lstm.png")
+# Plot the accuracy
+plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
+     xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
+     ylim = range(c(train_accuracy, valid_accuracy)))
+lines(1:length(valid_accuracy), valid_accuracy, type = "l", col = "red")
+legend("topright", legend = c("Training Accuracy", "Validation Accuracy"),
+       col = c("blue", "red"), lty = 1)
 
-rnn<-torch_load( paste( "M05_LSTM-DDD-K",k[1],k[2],subset_size,"Lay",n_layer,"Hn",n_hidden,"p",patience,sep="-"))
+# Close the PNG device
+dev.off()
+
+
+
+rnn<-torch_load( paste( "models/LTT_LSTM_TRy2",sep="-"))
 rnn$to(device =device  )
 
 
 
-# Evaluation of the predictions of the RNN w/ test set
+rnn$eval()
+pred <- vector(mode = "list", length = n_out)
+names(pred) <-true_names
 
-```{R}
-rnn$eval() 
-rm(nn.pred)
-nn.pred <- vector(mode = "list", length = n_out)
-names(nn.pred) <- names(true)
+Pred_total_list<- list("crbd"= vector() , "bisse" = vector() ,"ddd" = vector() , "pld"= vector())
 
-if (length(n_taxa) == 2){
-  coro::loop(for (i in 1:n_test) {
-    b   <- test.set[[i]]
-    out <- rnn(b$x$unsqueeze(3)$to(device = device))
-    out <- out$squeeze(1)$to(device = "cpu") %>% as.numeric()
-    #true <- b$y %>% as.array()
-    for (i in 1:length(out)){
-      nn.pred[[i]] <- c(nn.pred[[i]],out[i])
-      #test.true[[i]] <- c(test.true[[i]],true[i])
-    }
-  })
-}
 
-if (length(n_taxa) == 1) {
-  coro::loop(for (b in test_dl) {
-    out <- rnn(b$x$reshape(c(b$x$shape, 1L))$to(device = device))
-    pred <- as.numeric(out$to(device = "cpu")) # move the tensor to CPU 
-    true <- as.numeric(b$y)
-    vec.pred.lambda <- c(vec.pred.lambda, pred[1])
-    vec.pred.mu     <- c(vec.pred.mu, pred[2])
-    vec.true.lambda <- c(vec.true.lambda, true[1])
-    vec.true.mu     <- c(vec.true.mu, true[2])
-  })
-}
+acc_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0 ,"total" = 0)
+total_list <- list("crbd"= 0 , "bisse" = 0 ,"ddd" = 0 , "pld"= 0, "total"=0)
 
 
 
+# Compute accuracy 
+coro::loop(for (b in test_dl) {
+  output <- cnn_ltt(b$x$to(device = device ))
+  target <-  b$y$to(device = device)
+  
+  output<-torch_tensor(output,device = 'cpu')
+  target<-torch_tensor(target,device = 'cpu')
+  
+  
+  max_indices1 <- apply(output, 1, which.max)
+  max_indices2 <- apply(target, 1, which.max)
+  acc <- sum(max_indices1 == max_indices2)
+  total <- length(max_indices1)
+  
+  if(max_indices2==1){
+    acc_list$crbd=acc_list$crbd+acc
+    total_list$crbd=total_list$crbd+total
+    Pred_total_list$crbd <-c(Pred_total_list$crbd,max_indices1)
     
+  }
+  
+  if(max_indices2==2){
+    acc_list$bisse=acc_list$bisse+acc
+    total_list$bisse=total_list$bisse+total
+    Pred_total_list$bisse <-c(Pred_total_list$bisse,max_indices1)
     
+  }
+  
+  if(max_indices2==3){
+    acc_list$ddd=acc_list$ddd+acc
+    total_list$ddd=total_list$ddd+total
+    Pred_total_list$ddd <-c(Pred_total_list$ddd,max_indices1)
+  }
+  
+  if(max_indices2==4){
+    acc_list$pld=acc_list$pld+acc
+    total_list$pld=total_list$pld+total
+    Pred_total_list$pld <-c(Pred_total_list$pld,max_indices1)
+  }
+  
+  
+  acc_list$total= acc_list$total+acc
+  total_list$total=total_list$total+total
+  
+  
+  
+})
 
-# Example list of lists
 
 
-# Convert list to data frame
-#my_df <- data.frame(matrix(unlist(nn.pred), nrow = length(nn.pred), byrow = TRUE))
-
-# Export data frame to CSV
-#write.csv(my_df, "pred.csv", row.names = FALSE)
+result <- Map("/", acc_list, total_list)
 
 
-# Create a vector to store the phylo$Node values
-node_values_ddd <- c()
-node_values_crbd <- c()
-node_values_bisse  <- c()
+result$timemin <- as.numeric(time_cnnltt)
+result$best_epoch<-best_epoch
+result$epoch<-epoch
 
-# Iterate over each tree in the list
-for (i in seq_along(phylo)) {
-  num_nodes <- phylo[[i]]$Nnode  # Get the Node values for the current tree
-  node_values <- c(node_values, num_nodes)  # Append the Node values to the vector
+
+# Print the result
+print(result)
+
+## Plots Prediction vs Predicted
+
+
+
+write.csv(result, file = "Testing_results/lstm.csv", row.names = FALSE)
+
+# Plot histograms
+png("Plots/hist_lstm.png")
+par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
+
+categories <- c("crbd", "bisse", "ddd", "pld")
+
+for (category in categories) {
+  hist(Pred_total_list[[category]],
+       main = paste("Histogram for", category),
+       xlab = "Prediction",
+       xlim = c(-0.5, 4.5),  # Adjust xlim to center bars
+       breaks = -0.5:4.5)   # Adjust breaks to center bars
 }
 
-# Plot a histogram of node_values
-hist(node_values, breaks = "FD", main = "Histogram of Node Values", xlab = "Node Values")
+dev.off()
+
+

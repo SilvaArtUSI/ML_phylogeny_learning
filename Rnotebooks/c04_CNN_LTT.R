@@ -22,7 +22,7 @@ device <- "cuda"
 nn_type <- "cnn-ltt"
 max_nodes_rounded<-1200
 n_mods<-4
-generateltt<-FALSE
+generateltt<-TRUE
 
 
 
@@ -73,7 +73,7 @@ start_time <- Sys.time()
 df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$
   
   
-saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt.rds", sep=""))  
+saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))  
 
 end_time <- Sys.time()
 print(end_time - start_time)
@@ -86,7 +86,7 @@ rm(phylo_pld)
 
 }else{
   
-  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt.rds", sep=""))
+  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))
   
 }
 
@@ -96,7 +96,7 @@ rm(phylo_pld)
 
 set.seed(113)
 total_data_points<-n_trees*n_mods
-subset_size <- 10000  # Specify the size of the subset
+subset_size <- n_trees*n_mods  # Specify the size of the subset
 
 n_train    <- floor(subset_size * .9)
 n_valid    <- floor(subset_size * .05)
@@ -305,7 +305,7 @@ while (epoch < n_epochs & trigger < patience) {
   }
   if (current_loss< best_loss){
     
-    torch_save(cnn_ltt, paste( "models/CNNLTT_FIRST_TRy2",sep="-"))
+    torch_save(cnn_ltt, paste( "models/CNNLTT_FIRST_TRy2-corrected",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -332,7 +332,7 @@ print(end_time - start_time)
 time_cnnltt<-end_time - start_time
 
 
-png("Plots/loss_curve_cnnltt.png")
+png("Plots/loss_curve_cnnlttcorr.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -345,7 +345,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("Plots/acc_curve_cnnltt.png")
+png("Plots/acc_curve_cnnlttcorr.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -362,7 +362,7 @@ dev.off()
 
 
 
-cnn_ltt<-torch_load( paste( "models/CNNLTT_FIRST_TRy",patience,sep="-"))
+cnn_ltt<-torch_load( paste( "models/CNNLTT_FIRST_TRy2-corrected",sep="-"))
 cnn_ltt$to(device=device)
 
 cnn_ltt$eval()
@@ -442,11 +442,11 @@ print(result)
 
 
 
-write.csv(result, file = "Testing_results/cnnltt.csv", row.names = FALSE)
+write.csv(result, file = "Testing_results/cnnlttcorr.csv", row.names = FALSE)
 
 
 # Plot histograms
-png("Plots/hist_cnnltt2.png")
+png("Plots/hist_cnnlttcorr.png")
 par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
 
 categories <- c("crbd", "bisse", "ddd", "pld")

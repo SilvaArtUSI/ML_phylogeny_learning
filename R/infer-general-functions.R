@@ -1085,7 +1085,8 @@ generate_ltt_dataframe <- function(trees, n_taxa, true.param){
     ltt.coord <- as.data.frame(ltt.coord)
     ltt.coord.time <- ltt.coord$time
     n <- length(ltt.coord.time)
-    df.ltt[1:n,paste("tree", i, sep = "")] <- ltt.coord$time
+    df.ltt[1:n,paste("tree", i, sep = "")] <- (ltt.coord.time/(-ltt.coord$time[1]))
+    
     svMisc::progress(i, n_trees, progress.bar = TRUE, init = (i==1))
   }
   

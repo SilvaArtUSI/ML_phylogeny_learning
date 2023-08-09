@@ -77,7 +77,7 @@ if (generateltt==TRUE){
   df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$
     
     
-    saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt.rds", sep=""))  
+    saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))  
   
   end_time <- Sys.time()
   print(end_time - start_time)
@@ -90,7 +90,7 @@ if (generateltt==TRUE){
   
 }else{
   
-  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt.rds", sep=""))
+  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))
   
 }
 
@@ -336,7 +336,7 @@ while (epoch <= n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     
-    torch_save(cnn_ltt, paste( "models/LTT_LSTM_TRy2",sep="-"))
+    torch_save(cnn_ltt, paste( "models/LTT_LSTM_TRy2corr",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -360,7 +360,7 @@ print(run_timelstm)
 
 
 
-png("Plots/loss_curve_lstm.png")
+png("Plots/loss_curve_lstmcorr.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -373,7 +373,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("Plots/acc_curve_lstm.png")
+png("Plots/acc_curve_lstmcorr.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -387,7 +387,7 @@ dev.off()
 
 
 
-rnn<-torch_load( paste( "models/LTT_LSTM_TRy2",sep="-"))
+rnn<-torch_load( paste( "models/LTT_LSTM_TRy2corr",sep="-"))
 rnn$to(device =device  )
 
 
@@ -469,10 +469,10 @@ print(result)
 
 
 
-write.csv(result, file = "Testing_results/lstm.csv", row.names = FALSE)
+write.csv(result, file = "Testing_results/lstmcorr.csv", row.names = FALSE)
 
 # Plot histograms
-png("Plots/hist_lstm.png")
+png("Plots/hist_lstmcorr.png")
 par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
 
 categories <- c("crbd", "bisse", "ddd", "pld")

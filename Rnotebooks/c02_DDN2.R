@@ -348,7 +348,8 @@ while (epoch < n_epochs & trigger < patience) {
 }
 end_time <- Sys.time()
 
-print(end_time - start_time)
+dnn_runtime <- end_time - start_time
+print(dnn_runtime)
 
 
 ####Plots
@@ -459,6 +460,10 @@ coro::loop(for (b in test_dl) {
 
 result <- Map("/", acc_list, total_list)
 
+
+result$timemin <- as.numeric(dnn_runtime)
+result$best_epoch<-best_epoch
+result$epoch<-epoch
 
 # Print the result
 print(result)

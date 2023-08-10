@@ -317,8 +317,8 @@ while (epoch <= n_epochs & trigger < patience) {
 
 end_time <- Sys.time()
 
-run_timelstm <- end_time - start_time
-print(run_timelstm)
+time_lstm <- end_time - start_time
+print(time_lstm)
 
 
 
@@ -419,7 +419,7 @@ coro::loop(for (b in test_dl) {
 result <- Map("/", acc_list, total_list)
 
 
-result$timemin <- as.numeric(time_cnnltt)
+result$timemin <- as.numeric(time_lstm)
 result$best_epoch<-best_epoch
 result$epoch<-epoch
 

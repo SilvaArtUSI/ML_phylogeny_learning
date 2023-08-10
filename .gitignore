@@ -1,4 +1,9 @@
 
 *.txt
 data_clas/*
+models/*
+Plots/*
+Testing_results/*
+.Rhistory
+.RData
 .Rproj.user

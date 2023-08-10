@@ -18,11 +18,11 @@ source("R/new_funcs.R")
 
 
 n_trees <- 10000# number of trees to generate
-device <- "cuda"
+device <- "cpu"
 nn_type <- "cnn-ltt"
-max_nodes_rounded<-1200
+max_nodes_rounded<-readRDS(paste("data_clas/max_nodes.rds", sep=""))
 n_mods<-4
-generateltt<-TRUE
+generateltt<-FALSE
 
 
 
@@ -58,37 +58,9 @@ true <- lapply(1:4, function(i) c(true_crbd[[i]], true_bisse[[i]], true_ddd[[i]]
 names(true)<-true_names
 
 
-if (generateltt==TRUE){
   
-phylo_crbd <- readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9.rds", sep=""))
-phylo_bisse <- readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1.rds", sep=""))
-phylo_ddd <- readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-phylo_pld <- readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
- 
-phylo<-c(phylo_crbd,phylo_bisse,phylo_ddd,phylo_pld)
-
-
-start_time <- Sys.time()
-
-df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$
+df.ltt<-readRDS(paste("data_clas/phylo-all-dfltt.rds", sep=""))
   
-  
-saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))  
-
-end_time <- Sys.time()
-print(end_time - start_time)
-
-rm(phylo)
-rm(phylo_crbd)
-rm(phylo_bisse)
-rm(phylo_ddd)
-rm(phylo_pld)
-
-}else{
-  
-  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))
-  
-}
 
 
 
@@ -305,7 +277,7 @@ while (epoch < n_epochs & trigger < patience) {
   }
   if (current_loss< best_loss){
     
-    torch_save(cnn_ltt, paste( "models/CNNLTT_FIRST_TRy2-corrected",sep="-"))
+    torch_save(cnn_ltt, paste( "models/c04_CNNLTT_16",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -362,7 +334,7 @@ dev.off()
 
 
 
-cnn_ltt<-torch_load( paste( "models/CNNLTT_FIRST_TRy2-corrected",sep="-"))
+cnn_ltt<-torch_load( paste( "models/c04_CNNLTT_16",sep="-"))
 cnn_ltt$to(device=device)
 
 cnn_ltt$eval()

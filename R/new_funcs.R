@@ -166,6 +166,20 @@ return (max_nodes_rounded)
 }
 
 
+getmin_nodes<-function(phylo) {
+  
+  min_nodes<-1000000000
+  for (i in seq_along(phylo)) {
+    num_nodes <- phylo[[i]]$Nnode  # Get the number of nodes for the current tree
+    min_nodes <- min(min_nodes, num_nodes)  # Update the maximum number of nodes if necessary
+  }
+  
+  
+  return (min_nodes)
+  
+}
+
+
 new_generatePhyloBiSSE<-function(n_trees, n_taxa,param.range, ss_check = TRUE){
   
   no_NA_ss<-FALSE

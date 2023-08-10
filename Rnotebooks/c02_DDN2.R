@@ -22,7 +22,7 @@ source("R/new_funcs.R")
 
 n_trees<-10000
 num_mods<-4
-device="cuda"
+device="cpu"
 
 ###Loading Summary Statistics
 ##Rename as necessary
@@ -32,8 +32,18 @@ SS_check_NA_stat<-c(-7,	-8,	-9,	-10,	-11,	-12,	-13,	-14,	-15,	-16,	-17,	-18,	-19
    -42,	-43,	-44)
 
 
+
+
+#please validate paths
+crbd_path<- paste("data_clas/phylogeny-crbd-",n_trees,"ld-01-1-e-0-9-sumstat.rds", sep="")
+bisse_path<- paste("data_clas/phylogeny-bisse-",n_trees,"ld-.01-1.0-q-.01-.1-sumstat.rds", sep="")
+ddd_path<-paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds", sep="")
+pld_path<- paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds", sep="")
+
+
+
 ###CBRD###
-sumstat_crbd <- readRDS( paste("data_clas/phylogeny-crbd-",n_trees,"ld-01-1-e-0-9.rds-sumstat.rds", sep=""))
+sumstat_crbd <- readRDS( crbd_path)
 sumstat_crbd <- sumstat_crbd[c(-86,-85)]
 sumstat_crbd <- sumstat_crbd [SS_check_NA_stat]
 
@@ -44,7 +54,7 @@ sumstat_crbd$pld <-1
 
 
 ###Bisse###
-sumstat_bisse <-readRDS( paste("data_clas/phylogeny-bisse-",n_trees,"ld-.01-1.0-q-.01-.1.rds-sumstat.rds", sep=""))
+sumstat_bisse <-readRDS( bisse_path )
 sumstat_bisse <- sumstat_bisse[c(-90,-89,-88,-87,-86,-85)] 
 sumstat_bisse <- sumstat_bisse [SS_check_NA_stat]
 
@@ -56,7 +66,7 @@ sumstat_bisse$pld <-1
 
 
 ###DDD###
-sumstat_ddd <-readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds", sep=""))
+sumstat_ddd <-readRDS(ddd_path )
 sumstat_ddd <- sumstat_ddd[c(-88,-87,-86,-85)] 
 sumstat_ddd <- sumstat_ddd[SS_check_NA_stat]
 
@@ -67,7 +77,7 @@ sumstat_ddd$pld <-1
 
 
 ###PLD###
-sumstat_pld <-readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds", sep=""))
+sumstat_pld <-readRDS( pld_path)
 sumstat_pld <- sumstat_pld[c(-88,-87,-86,-85)] 
 sumstat_pld <- sumstat_pld[SS_check_NA_stat]
 
@@ -188,8 +198,7 @@ dnn <- build_dnn(n_in = n_in, n_hidden = n_hidden, n_out = n_out,
 dnn$to(device = device)
 #opt <- optim_adam(params = dnn$parameters)
 
-
-learning_rate <- 0.01
+#learning_rate <- 0.01
 opt <- optim_adam(params = dnn$parameters)
 #opt <- optim_sgd(params = dnn$parameters,lr = 0.001, momentum = 0.9)
 
@@ -270,6 +279,11 @@ train_plots <- list()
 valid_plots <- list()
 
 
+best_epoch<-0
+best_loss<-10000
+
+
+
 # Training loop.
 start_time <-  Sys.time()
 while (epoch < n_epochs & trigger < patience) {
@@ -308,6 +322,14 @@ while (epoch < n_epochs & trigger < patience) {
   else{
     trigger   <- 0
     last_loss <- current_loss
+  }
+  
+  if (current_loss< best_loss){
+    
+    torch_save(dnn, paste( "models/c02_DNN_500_10",sep="-"))
+    best_epoch<-epoch
+    best_loss<-current_loss
+    
   }
   
   
@@ -366,13 +388,12 @@ dev.off()
 #       col = c("blue", "red"), lty = 1)
 
 
-torch_save(dnn, paste( "models/c01_DNN_1st_500n10",sep="-"))
+torch_save(dnn, paste( "models/c02_DNN_500_10",sep="-"))
 cat(paste("\n Model dnn saved", sep = ""))
 cat("\nSaving model... Done.")
 
 
-device <- 'cuda'
-dnn<-torch_load(paste( "models/c01_DNN_1st_500n10",sep="-"),device = device)
+dnn<-torch_load(paste( "models/c02_DNN_500_10",sep="-"),device = device)
 
 
 

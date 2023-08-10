@@ -18,10 +18,10 @@ source("R/new_funcs.R")
 max_nodes_rounded<-1200 #computed in previous codes
 n_trees<-10000
 n_mods<-4
-device<-"cuda"
+device<-"cpu"
 
 
-
+## Please check names
 cblv_crbd <-readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9-cblv.rds",sep=""))
 cblv_bisse <-readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1-cblv.rds",sep=""))
 cblv_ddd <-readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-cblv.rds",sep=""))
@@ -267,7 +267,7 @@ while (epoch < n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     
-    torch_save(cnn, paste( "models/c01_CNN_1st_try2",sep="-"))
+    torch_save(cnn, paste( "models/c03_CNN_32",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -317,7 +317,7 @@ dev.off()
 
 
 
-cnn<-torch_load( paste( "models/c01_CNN_1st_try2",sep="-"))
+cnn<-torch_load( paste( "models/c03_CNN_32",sep="-"))
 
 cnn$to(device=device)
 

@@ -16,21 +16,14 @@ source("R/new_funcs.R")
 # Set parameters DDD model simulation
 ## Factor for unitary trees 15
 n_trees <- 10000# number of trees to generate
-
-dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter K (= diversity where speciation = extinction)
-
-device <- "cuda" # GPU where to run computations 
+device <- "cpu" # GPU where to run computations 
 nn_type <- "rnn-ltt" # type of the model: Recurrent Neural Network w/ LTT
 
 
 
-max_nodes_rounded<-1200
-min_nodes_rounded<-1
+max_nodes_rounded<-readRDS(paste("data_clas/max_nodes.rds", sep=""))
+min_nodes_rounded<-readRDS(paste("data_clas/min_nodes.rds", sep=""))
 n_mods<-4
-generateltt<-FALSE
-
-
-
 
 
 
@@ -62,38 +55,7 @@ true <- lapply(1:4, function(i) c(true_crbd[[i]], true_bisse[[i]], true_ddd[[i]]
 names(true)<-true_names
 
 
-if (generateltt==TRUE){
-  
-  phylo_crbd <- readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9.rds", sep=""))
-  phylo_bisse <- readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1.rds", sep=""))
-  phylo_ddd <- readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-  phylo_pld <- readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds", sep=""))
-  
-  phylo<-c(phylo_crbd,phylo_bisse,phylo_ddd,phylo_pld)
-  
-  
-  start_time <- Sys.time()
-  
-  df.ltt <- generate_ltt_dataframe(phylo, max_nodes_rounded, true)$
-    
-    
-    saveRDS(df.ltt, paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))  
-  
-  end_time <- Sys.time()
-  print(end_time - start_time)
-  
-  rm(phylo)
-  rm(phylo_crbd)
-  rm(phylo_bisse)
-  rm(phylo_ddd)
-  rm(phylo_pld)
-  
-}else{
-  
-  df.ltt<-readRDS(paste("data_clas/phylogeny-all-dfltt2.rds", sep=""))
-  
-}
-
+df.ltt<-readRDS(paste("data_clas/phylo-all-dfltt.rds", sep=""))
 
 
 set.seed(113)
@@ -336,7 +298,7 @@ while (epoch <= n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     
-    torch_save(cnn_ltt, paste( "models/LTT_LSTM_TRy2corr",sep="-"))
+    torch_save(cnn_ltt, paste( "models/c05_LSTM",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -387,7 +349,7 @@ dev.off()
 
 
 
-rnn<-torch_load( paste( "models/LTT_LSTM_TRy2corr",sep="-"))
+rnn<-torch_load( paste( "models/c05_LSTM",sep="-"))
 rnn$to(device =device  )
 
 

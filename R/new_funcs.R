@@ -330,4 +330,11 @@ calculate_accuracy <- function(predicted, target) {
 
 
 
+rescale_tree <- function(phy, new_crown_age = 1) {
+  ltable <- DDD::phylo2L(phy)
+  ltable[, 1] <- new_crown_age * ltable[, 1] / max(ltable[, 1])
+  new_phy <- DDD::L2phylo(ltable)
+  return(new_phy)
+}
+
 

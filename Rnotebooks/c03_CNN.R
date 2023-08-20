@@ -394,6 +394,7 @@ result <- Map("/", acc_list, total_list)
 
 
 result$timemin <- as.numeric(time_cnn)
+result$unit <- units(time_cnn)
 result$best_epoch<-best_epoch
 result$epoch<-epoch
 
@@ -403,7 +404,7 @@ print(result)
 #print("Accuray total Testing")
 #print(sum(unlist(acc_list))/sum(unlist(total_list)))
 
-write.csv(result, file = "Testing_results/cnn2.csv", row.names = FALSE)
+write.csv(result, file = "data_clas/results/cnn.csv", row.names = FALSE)
 
 
 # Plot histograms
@@ -423,34 +424,7 @@ for (category in categories) {
 dev.off()
 
 
-Pred_conf <- lapply(categories, function(cat) {
-  tab <- table(factor(Pred_total_list[[cat]], levels = c("CRBD", "BiSSE", "DDD", "PLD")))
-  as.list(tab)
-})
 
-# Convert Pred_conf to a data frame
-confusion_matrix_df <- data.frame(
-  category = rep(categories, each = 4),
-  model = rep(c("CRBD", "BiSSE", "DDD", "PLD"), times = length(categories)),
-  count = unlist(Pred_total_list)
-)
-
-# Reshape the data frame to a matrix
-library(reshape2)
-confusion_matrix_matrix <- dcast(confusion_matrix_df, category ~ model, value.var = "count")
-colnames(confusion_matrix_matrix)[1] <- ""
-
-# Print the resulting matrix
-print(confusion_matrix_matrix)
-
-
-# Write the data frame to a CSV file
-write.csv(confusion_matrix_matrix, "data_clas/results/confmat.csv", row.names = FALSE)
-
-
-
-
-write.csv(Pred_conf, file = "data_clas/results/confmat.csv", row.names = TRUE)
 
 Pred_conf <- lapply(Pred_total_list, function(numbers) {
   tab <- table(factor(numbers, levels = 1:4))

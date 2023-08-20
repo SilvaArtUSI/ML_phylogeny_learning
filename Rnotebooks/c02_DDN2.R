@@ -22,7 +22,7 @@ source("R/new_funcs.R")
 
 n_trees<-10000
 num_mods<-4
-device="cpu"
+device="cuda"
 
 ###Loading Summary Statistics
 ##Rename as necessary
@@ -35,8 +35,8 @@ SS_check_NA_stat<-c(-7,	-8,	-9,	-10,	-11,	-12,	-13,	-14,	-15,	-16,	-17,	-18,	-19
 
 
 #please validate paths
-crbd_path<- paste("data_clas/phylogeny-crbd-",n_trees,"ld-01-1-e-0-9-sumstat.rds", sep="")
-bisse_path<- paste("data_clas/phylogeny-bisse-",n_trees,"ld-.01-1.0-q-.01-.1-sumstat.rds", sep="")
+crbd_path<- paste("data_clas/phylogeny-reescrbd-10000ld-01-1-e-0-9-sumstat.rds", sep="")
+bisse_path<- paste("data_clas/phylogeny-reesbisse-10000ld-01-1-e-0-9-sumstat.rds", sep="")
 ddd_path<-paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds", sep="")
 pld_path<- paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds", sep="")
 
@@ -326,7 +326,7 @@ while (epoch < n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     
-    torch_save(dnn, paste( "models/c02_DNN_500_10reescaled",sep="-"))
+    torch_save(dnn, paste( "data_clas/models/c02_DNN_500_10reescaled",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -355,7 +355,7 @@ print(dnn_runtime)
 ####Plots
 
 
-png("Plots/loss_curve_100_10_2.png")
+png("data_clas/plots/loss_curve_100_10_2reescaled.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -394,7 +394,7 @@ cat(paste("\n Model dnn saved", sep = ""))
 cat("\nSaving model... Done.")
 
 
-dnn<-torch_load(paste( "models/c02_DNN_500_10",sep="-"),device = device)
+dnn<-torch_load(paste( "data_clas/models/c02_DNN_500_10reescaled",sep="-"),device = device)
 
 
 

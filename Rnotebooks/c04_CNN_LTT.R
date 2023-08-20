@@ -20,7 +20,8 @@ source("R/new_funcs.R")
 n_trees <- 10000# number of trees to generate
 device <- "cuda"
 nn_type <- "cnn-ltt"
-max_nodes_rounded<-readRDS(paste("data_clas/max_nodes.rds", sep=""))
+max_nodes_rounded<-1200
+#max_nodes_rounded<-readRDS(paste("data_clas/max_nodes.rds", sep=""))
 n_mods<-4
 generateltt<-FALSE
 
@@ -59,7 +60,7 @@ names(true)<-true_names
 
 
   
-df.ltt<-readRDS(paste("data_clas/phylo-all-dfltt.rds", sep=""))
+df.ltt<-readRDS(paste("data_clas/phyloreescaled-all-dfltt.rds", sep=""))
   
 
 
@@ -277,7 +278,7 @@ while (epoch < n_epochs & trigger < patience) {
   }
   if (current_loss< best_loss){
     
-    torch_save(cnn_ltt, paste( "models/c04_CNNLTT_16",sep="-"))
+    torch_save(cnn_ltt, paste( "data_clas/models/c04_CNNLTT_16",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -304,7 +305,7 @@ print(end_time - start_time)
 time_cnnltt<-end_time - start_time
 
 
-png("Plots/loss_curve_cnnlttcorr.png")
+png("data_clas/plots/loss_curve_cnnlttcorr.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -317,7 +318,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("Plots/acc_curve_cnnlttcorr.png")
+png("data_clas/plots/acc_curve_cnnlttcorr.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
@@ -334,7 +335,7 @@ dev.off()
 
 
 
-cnn_ltt<-torch_load( paste( "models/c04_CNNLTT_16",sep="-"))
+cnn_ltt<-torch_load( paste( "data_clas/models/c04_CNNLTT_16",sep="-"))
 cnn_ltt$to(device=device)
 
 cnn_ltt$eval()
@@ -403,6 +404,7 @@ result <- Map("/", acc_list, total_list)
 
 
 result$timemin <- as.numeric(time_cnnltt)
+result$units<-units(time_cnnltt)
 result$best_epoch<-best_epoch
 result$epoch<-epoch
 
@@ -414,11 +416,11 @@ print(result)
 
 
 
-write.csv(result, file = "Testing_results/cnnlttcorr.csv", row.names = FALSE)
+write.csv(result, file = "data_clas/results/cnnlttcorr.csv", row.names = FALSE)
 
 
 # Plot histograms
-png("Plots/hist_cnnlttcorr.png")
+png("data_clas/plots/hist_cnnlttcorr.png")
 par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
 
 categories <- c("crbd", "bisse", "ddd", "pld")
@@ -432,6 +434,21 @@ for (category in categories) {
 }
 
 dev.off()
+
+
+
+Pred_conf <- lapply(Pred_total_list, function(numbers) {
+  tab <- table(factor(numbers, levels = 1:4))
+  as.numeric(tab)  # Convert table to numeric vector
+})
+
+# Convert Pred_conf to a matrix
+confusion_matrix <- do.call(rbind, Pred_conf)
+
+colnames(confusion_matrix) <- c("True CRBD", "True BiSSE", "True DDD", "True PLD")
+
+# Write the data frame to a CSV file
+write.csv(confusion_matrix, "data_clas/results/cnnltt_confmat.csv", row.names = TRUE)
 
 
 

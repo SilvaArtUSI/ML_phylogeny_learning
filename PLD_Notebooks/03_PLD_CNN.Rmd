@@ -1,11 +1,18 @@
 ---
-title: "DDD  Convolutinal Neural NEtwork."
+title: "PLD  Convolutinal Neural NEtwork."
 output: html_document
 date: "2023-04-18"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+
+
+#workingdirectory
+path_dir = "/Users/oasc/Documents/Thesis/ML_phylogeny_learning"
+
+knitr::opts_knit$set(root.dir =path_dir)
 ```
 
 
@@ -30,15 +37,20 @@ source("R/new_funcs.R")
 set.seed(113)
 device = "cpu" # change if you want to compute GPUs
 
-n_trees <- 100000# number of trees to generate
-model   <- "DDD"
-lambda0 <- c(.5, 1.5) # speciation rate
-mu      <- c(0.05,0.5) #  extinction rate
+n_trees <- 10000# number of trees to generate
+model   <- "PLD"
+#lambda0 <- c(.5, 1.5) # speciation rate
+#mu      <- c(0.05,0.5) #  extinction rate
 #k	<-c(10,20)         # carrying Capacity
-k<- c(40,100)
+#k<- c(40,100)
  
-crown_age <- 15 
+#crown_age <- 15 
 dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter K (= diversity where speciation = extinction)
+
+path_pld<-"data_PLD/"
+#sumstat_f<-"phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds"
+phylo_f<-"phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds"
+true_f<-"true-param-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds"
 
 ```
 
@@ -47,26 +59,27 @@ dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter 
 ``` {R,Recoverying Parameters and Statistics}
 
 
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
-if( file.exists( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep="") )==TRUE){
-
-phylo <- readRDS( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep=""))
-true <- readRDS(paste("data/true-param-", model, "-",phylo_name,".rds", sep=""))
-
-true[[3]]<-true[[3]]/100
-true[[4]]<-true[[4]]/100
-
-true<-true[c(-4)] # Removing crown age from variables
+phylo <- readRDS( paste(path_ddd,phylo_f,sep=""))
+true <- readRDS( paste(path_ddd,true_f,sep=""))
 
 
-  
-}else {
-  
-print("There is no phylogenetic tree with the  declared parameters")
-}
+
+#true[[4]]<-true[[4]]/100 #adjusting parameters
+
+#true<-true[c(-4)] # Removing crown age from variables
+true$beta_n <- (true$mu-true$lambda0)/true$K
+
+true<-true[c(1,2,5,4)]
+
+true[[1]]<-true[[1]]/10
+true[[2]]<-true[[2]]/10
+
+
 ```
 
-```{r}
+
+
+```{R}
 max_nodes <- 0  # Variable to store the maximum number of nodes
 
 # Iterate over each tree in the list
@@ -81,24 +94,24 @@ max_nodes_rounded <- ceiling(max_nodes / 50) * 50
 
 ```{R}
 
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
+#phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
 
 
-if( file.exists( paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds",sep=""))==FALSE){
+if( file.exists(paste("data_pld/phylogeny-",model,"-",n_trees,"-cblv.rds", sep=""))==FALSE){
 start_time <- Sys.time()
 
 cblv <- generate_encoding_DDD(phylo, tree_size = max_nodes_rounded)
 end_time <- Sys.time()
 print(end_time - start_time)
 
-saveRDS(cblv, paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds", sep=""))
+saveRDS(cblv, paste("data_pld/phylogeny-",model,"-",n_trees,"-cblv.rds", sep=""))
 #additional tree info
 
 
 }else{
   print(paste("Tree from model: ",model,", already generated. Reading file",sep=""))
   
-  cblv <- readRDS( paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds",sep=""))
+  cblv <- readRDS( paste("data_pld/phylogeny-",model,"-",n_trees,"-cblv.rds", sep=""))
 }
 ```
 
@@ -241,7 +254,11 @@ epoch <- 1
 trigger <- 0
 patience <- 10
 n_epochs <- 100
-last_loss <- 100
+last_loss <- 10000
+
+
+best_loss<-10000
+best_epoch<-0
 
 
 # Training loop 
@@ -282,6 +299,16 @@ while (epoch < n_epochs & trigger < patience) {
     last_loss <- current_loss
   }
   
+    
+  if (current_loss< best_loss){
+    #save best model
+    torch_save(cnn, paste("data_PLD/models_pld/PLD_04_CNN","lay",n_layer,"hid",n_hidden,sep="-"))
+    best_epoch<-epoch
+    best_loss<-current_loss
+    
+  }
+  
+  
   cat(sprintf("epoch %0.3d/%0.3d - valid - loss: %3.5f \n", epoch, n_epochs, current_loss))
   
   train_losses <- c(train_losses, mean(train_loss))
@@ -311,21 +338,8 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 
 
 ## Saving the model
-
-```{r,Storing the Model}
-
-torch_save(cnn, paste( "M03_CNN-DDD-K",k[1],k[2],
-                       subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-cat(paste("\n Model cnn saved", sep = ""))
-cat("\nSaving model... Done.")
-
-cnn<-torch_load( paste( "M03_CNN-DDD-K",k[1],k[2],
-                        subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-
-```
 ```{R}
-cnn<-torch_load( paste( "M03_CNN-DDD-K",k[1],k[2],
-                        subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
+cnn<-torch_load(  paste("data_PLD/models_pld/PLD_04_CNN","lay",n_layer,"hid",n_hidden,sep="-"))
 cnn$to(device=device)
 
 ```
@@ -345,6 +359,8 @@ coro::loop(for (b in test_dl) {
   p <- as.numeric(out$to(device = "cpu")) # move the tensor to CPU 
   for (i in 1:n_out){pred[[i]] <- c(pred[[i]], p[i])}
 })
+
+
 ```
 
 Now that you have the predicted parameters you can, for instance, 
@@ -353,15 +369,26 @@ plot the predicted value by the neural network vs. the true values.
 ## Plots Prediction vs Predicted
 ```{R, Plots Prediciton vs Predicted}
 # Prepare plot 
-par(mfrow = c(1, 3))
 
+# Prepare plot 
+dpi <- 300  # Adjust as needed
+width <- 10  # Adjust as needed (in inches)
+height <- 5  # Adjust as needed (in inches)
+
+# Start the PNG device with specified parameters
+png("Plots/cnn_truevspred.png", width = width, height = height, units = "in", res = dpi)
+
+
+par(mfrow = c(1, 4))
 plot(true[[1]][test_indices], pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
 
 plot(true[[2]][test_indices], pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
 
-plot(true[[3]][test_indices] * 100, pred[[3]] * 100, main = "K", xlab = "True", ylab = "Predicted")
+plot(true[[3]][test_indices], pred[[3]] , main = "K", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(true[[4]][test_indices], pred[[4]] , main = "K", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
 ```
 
@@ -378,6 +405,9 @@ for (i in 1:length(true))
 names(mse_l) <- names(true)
 
 mse_l
+
+
+mse_l 
 
 
 ```

@@ -78,7 +78,7 @@ true$beta_n <- (true$mu-true$lambda0)/true$K
 true<-true[c(1,2,5,4)]
 
 true[[1]]<-true[[1]]/10
-true[[2]]<-true[[1]]/10
+true[[2]]<-true[[2]]/10
 ```
 
 
@@ -265,7 +265,7 @@ epoch     <- 1
 trigger   <- 0 
 last_loss <- 10000
 n_epochs<-100
-patience<-1000
+patience<-10
 
 best_loss<-10000
 best_epoch<-0
@@ -305,7 +305,7 @@ while (epoch < n_epochs & trigger < patience) {
   # Early Stopping 
   if (current_loss > last_loss){trigger <- trigger + 1 
   
-  print(trigger)
+  #print(trigger)
   }else{
     last_loss <- current_loss
     trigger<-0
@@ -314,7 +314,7 @@ while (epoch < n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     #save best model
-    torch_save(cnn_ltt, paste("PLD_04_CNNLTT","lay",n_layer,"hid",n_hidden="-"))
+    torch_save(cnn_ltt, paste("data_PLD/models_pld/PLD_04_CNNLTT","lay",n_layer,"hid",n_hidden,sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -353,21 +353,13 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 
 ## Saving the model
 
-```{r,Storing the Model}
 
-torch_save(cnn_ltt, paste( "M04_CNNLTT-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-cat(paste("\n Model cnn ltt saved", sep = ""))
-cat("\nSaving model... Done.")
-
-cnn_ltt<-torch_load( paste( "M04_CNNLTT-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-
-```
 
 
 ```{R, For only loading the model}
 
 
-cnn_ltt<-torch_load( paste( "M04_CNNLTT-DDD-K",k[1],k[2],subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
+cnn_ltt<-torch_load( paste("data_PLD/models_pld/PLD_04_CNNLTT","lay",n_layer,"hid",n_hidden,sep="-"))
 cnn_ltt$to(device=device)
 
 ```
@@ -394,8 +386,14 @@ coro::loop(for (b in test_dl) {
 ## Plots Prediction vs Predicted
 ```{R, Plots Prediciton vs Predicted}
 # Prepare plot 
-par(mfrow = c(1, 4))
+dpi <- 300  # Adjust as needed
+width <- 10  # Adjust as needed (in inches)
+height <- 5  # Adjust as needed (in inches)
 
+# Start the PNG device with specified parameters
+png("Plots/cnnltt_truevspred.png", width = width, height = height, units = "in", res = dpi)
+
+par(mfrow = c(1, 4))
 plot(true[[1]][test_indices], nn.pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
 
@@ -407,6 +405,7 @@ abline(0, 1,col="red")
 
 plot(true[[4]][test_indices] , nn.pred[[4]] , main = "beta_p", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
+dev.off()
 ```
 
 

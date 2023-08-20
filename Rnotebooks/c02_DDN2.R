@@ -326,7 +326,7 @@ while (epoch < n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     
-    torch_save(dnn, paste( "models/c02_DNN_500_10",sep="-"))
+    torch_save(dnn, paste( "models/c02_DNN_500_10reescaled",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     

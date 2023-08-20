@@ -17,7 +17,7 @@ import os
 
 
 
-path = r"C:\\Users\\oasc_\\Documents\\Thesis\\ML_phylogeny_learning"
+path = r"/mnt/c/Users/oasc_/Documents/Thesis/ML_phylogeny_learning"
 os.getcwd()
 os.chdir(path )
 print(os.getcwd())
@@ -29,8 +29,8 @@ pandas2ri.activate()
 #fname_param = "data/true-param-DDD-nt-1e+05-la0-0.5-1.5-mu-0.05-0.5-k-10-20-age-15-ddmod-1.rds"
 
 
-fname_graph =  path + r"\\data_clas\\phylogeny-all-graph.rds"
-fname_param = path + r"\\data_clas\\true-param-all-graph.rds"
+fname_graph =  path + r"/data_clas/phylogeny-all-graph.rds"
+fname_param = path + r"/data_clas/true-param-all-graph.rds"
 
 readRDS = robjects.r['readRDS']
 df_graph = readRDS(fname_graph)
@@ -47,7 +47,6 @@ df_param = pandas2ri.rpy2py(df_param)
 
 
 preselected_sets = False
-subset_size = 20000 # Specify the size of the subset
 file_of_index = "data/10_3_indices_set_-DDD-Totalset-10000-SubSiz-10000-.rds" # to use the same as R
 
 if preselected_sets == True:
@@ -62,8 +61,8 @@ if preselected_sets == True:
 
 else:
     #total_data_points = len(df_graph)
-    total_data_points = 20000
-    subset_size = 19000  # Specify the size of the subset
+    total_data_points = 40000
+    subset_size = 40000-1 # Specify the size of the subset
 
     n_train = int(subset_size * 0.9)
     n_valid = int(subset_size * 0.05)
@@ -124,7 +123,7 @@ def convert_df_to_tensor(df_node, df_edge, params):
 
 save = False
 
-fname = fname_param[:-9] + "geomtensor2" + ".obj" # file name 
+fname = fname_param[:-9] + "geomtensor" + ".obj" # file name 
 if (save):
     print("Save")
     file = open(fname, "wb") # file handler 
@@ -135,9 +134,12 @@ else:
     file = open(fname, "rb")
     data_list = pickle.load(file) 
 
+del df_graph
+del df_param
+
 
 #device = "cuda:2" # GPU to use 
-device="cuda:0"
+device="cuda"
 batch_size_max = 32
 
 
@@ -280,3 +282,9 @@ for epoch in range(n_epochs):
             early_stop = True
 
 print("Best epoch:", best_epoch)
+
+# Specify the file path to save the model
+file_path = 'GraphNeural.pt'
+
+# Save the model
+torch.save(model.state_dict(), file_path)

@@ -18,12 +18,12 @@ source("R/new_funcs.R")
 max_nodes_rounded<-1200 #computed in previous codes
 n_trees<-10000
 n_mods<-4
+#device<-"cuda"
 device<-"cpu"
 
-
 ## Please check names
-cblv_crbd <-readRDS( paste("data_clas/phylogeny-crbd10000ld-01-1-e-0-9-cblv.rds",sep=""))
-cblv_bisse <-readRDS( paste("data_clas/phylogeny-bisse-10000ld-.01-1.0-q-.01-.1-cblv.rds",sep=""))
+cblv_crbd <-readRDS( paste("data_clas/phylogeny-reescrbd-10000ld-01-1-e-0-9-cblv.rds",sep=""))
+cblv_bisse <-readRDS( paste("data_clas/phylogeny-reesbisse-10000ld-01-1-e-0-9-cblv.rds",sep=""))
 cblv_ddd <-readRDS( paste("data_clas/phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-cblv.rds",sep=""))
 cblv_pld <-readRDS( paste("data_clas/phylogeny-pld-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-cblv.rds",sep=""))
 
@@ -267,7 +267,7 @@ while (epoch < n_epochs & trigger < patience) {
   
   if (current_loss< best_loss){
     
-    torch_save(cnn, paste( "models/c03_CNN_32",sep="-"))
+    torch_save(cnn, paste( "data_clas/models/c03_CNN_32",sep="-"))
     best_epoch<-epoch
     best_loss<-current_loss
     
@@ -289,9 +289,10 @@ end_time <- Sys.time()
 time_cnn <-end_time - start_time
 print(time_cnn)
 
+dpi=300
 
 
-png("Plots/loss_curve_cnn2.png")
+png("data_clas/plots/Loss_curve_CNN.png")
 # Plot the loss curve
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
@@ -299,13 +300,11 @@ plot(1:length(train_losses), train_losses, type = "l", col = "blue",
 lines(1:length(valid_losses), valid_losses, type = "l", col = "red")
 legend("topright", legend = c("Training Loss", "Validation Loss"),
        col = c("blue", "red"), lty = 1)
-
-# Close the PNG device
 dev.off()
+# Close the PNG device
 
-
-png("Plots/acc_curve_cnn2.png")
 # Plot the accuracy
+png("data_clas/plots/Acc_curve_CNN.png")
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
      ylim = range(c(train_accuracy, valid_accuracy)))
@@ -318,7 +317,7 @@ dev.off()
 
 
 
-cnn<-torch_load( paste( "models/c03_CNN_32",sep="-"))
+cnn<-torch_load( paste( "data_clas/models/c03_CNN_32",sep="-"))
 
 cnn$to(device=device)
 
@@ -389,6 +388,8 @@ coro::loop(for (b in test_dl) {
 
 
 
+
+
 result <- Map("/", acc_list, total_list)
 
 
@@ -422,6 +423,47 @@ for (category in categories) {
 dev.off()
 
 
+Pred_conf <- lapply(categories, function(cat) {
+  tab <- table(factor(Pred_total_list[[cat]], levels = c("CRBD", "BiSSE", "DDD", "PLD")))
+  as.list(tab)
+})
+
+# Convert Pred_conf to a data frame
+confusion_matrix_df <- data.frame(
+  category = rep(categories, each = 4),
+  model = rep(c("CRBD", "BiSSE", "DDD", "PLD"), times = length(categories)),
+  count = unlist(Pred_total_list)
+)
+
+# Reshape the data frame to a matrix
+library(reshape2)
+confusion_matrix_matrix <- dcast(confusion_matrix_df, category ~ model, value.var = "count")
+colnames(confusion_matrix_matrix)[1] <- ""
+
+# Print the resulting matrix
+print(confusion_matrix_matrix)
+
+
+# Write the data frame to a CSV file
+write.csv(confusion_matrix_matrix, "data_clas/results/confmat.csv", row.names = FALSE)
+
+
+
+
+write.csv(Pred_conf, file = "data_clas/results/confmat.csv", row.names = TRUE)
+
+Pred_conf <- lapply(Pred_total_list, function(numbers) {
+  tab <- table(factor(numbers, levels = 1:4))
+  as.numeric(tab)  # Convert table to numeric vector
+})
+
+# Convert Pred_conf to a matrix
+confusion_matrix <- do.call(rbind, Pred_conf)
+
+colnames(confusion_matrix) <- c("True CRBD", "True BiSSE", "True DDD", "True PLD")
+
+# Write the data frame to a CSV file
+write.csv(confusion_matrix, "data_clas/results/cnn_confmat.csv", row.names = TRUE)
 
 
 

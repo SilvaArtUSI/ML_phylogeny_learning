@@ -18,7 +18,7 @@ source("R/new_funcs.R")
 
 
 n_trees <- 10000# number of trees to generate
-device <- "cpu"
+device <- "cuda"
 nn_type <- "cnn-ltt"
 max_nodes_rounded<-readRDS(paste("data_clas/max_nodes.rds", sep=""))
 n_mods<-4

@@ -1,6 +1,6 @@
 
 *.txt
-data_clas/*
+data_clas/*.rds
 models/*
 Plots/*
 Testing_results/*

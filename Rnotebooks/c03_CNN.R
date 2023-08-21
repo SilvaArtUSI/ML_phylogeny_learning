@@ -19,7 +19,7 @@ max_nodes_rounded<-1200 #computed in previous codes
 n_trees<-10000
 n_mods<-4
 #device<-"cuda"
-device<-"cpu"
+device<-"cuda"
 
 ## Please check names
 cblv_crbd <-readRDS( paste("data_clas/phylogeny-reescrbd-10000ld-01-1-e-0-9-cblv.rds",sep=""))
@@ -105,7 +105,7 @@ n_layer  <- 4
 ker_size <- 10
 n_input  <- nrow(cblv_total)
 n_out    <- length(true_total)
-p_dropout <- 0.01
+p_dropout <- 0.1
 
 
 # Build the CNN
@@ -408,11 +408,9 @@ write.csv(result, file = "data_clas/results/cnn.csv", row.names = FALSE)
 
 
 # Plot histograms
-png("Plots/hist_cnn2.png")
+png("data_clas/plots/hist_cnn2.png")
 par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
-
 categories <- c("crbd", "bisse", "ddd", "pld")
-
 for (category in categories) {
   hist(Pred_total_list[[category]],
        main = paste("Histogram for", category),
@@ -434,7 +432,7 @@ Pred_conf <- lapply(Pred_total_list, function(numbers) {
 # Convert Pred_conf to a matrix
 confusion_matrix <- do.call(rbind, Pred_conf)
 
-colnames(confusion_matrix) <- c("True CRBD", "True BiSSE", "True DDD", "True PLD")
+colnames(confusion_matrix) <- c("Predictrd CRBD", "Predictrd BiSSE", "Predictrd DDD", "Predictrd PLD")
 
 # Write the data frame to a CSV file
 write.csv(confusion_matrix, "data_clas/results/cnn_confmat.csv", row.names = TRUE)

@@ -116,7 +116,7 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1,          shuffle=FALSE)
 n_hidden  <- 16
 n_layer   <- 3
 ker_size  <- 5
-p_dropout <- 0.01
+p_dropout <- 0.1
 n_input   <- max_nodes_rounded
 n_out     <- n_mods
 

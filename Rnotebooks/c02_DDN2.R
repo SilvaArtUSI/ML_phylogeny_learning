@@ -140,11 +140,11 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1, shuffle=FALSE)
 #### Neural Network Definition(modified for classification problem)
 n_in      <- length(train_ds[1]$x) # number of neurons of the input layer 
 n_out     <- num_mods # number of classes
-n_hidden  <- 500 # number of neurons in the hidden layers 
-p_dropout <- 0.01 # dropout probability 
+n_hidden  <- 300 # number of neurons in the hidden layers 
+p_dropout <- 0.1 # dropout probability 
 n_epochs  <- 100 # maximum number of epochs for the training 
-patience  <- 5 # patience of the early stopping 
-
+patience  <- 10 # patience of the early stopping 
+num_hidden_layers <- 5
 
 
 # Build the neural network.
@@ -190,7 +190,7 @@ build_dnn <- function(n_in, n_hidden, n_out, num_hidden_layers, p_dropout) {
 
 
 # Set up the neural network with the desired number of hidden layers.
-num_hidden_layers <- 10
+
 dnn <- build_dnn(n_in = n_in, n_hidden = n_hidden, n_out = n_out, 
                  num_hidden_layers = num_hidden_layers, p_dropout = p_dropout)
 
@@ -368,10 +368,10 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 dev.off()
 
 
-png("Plots/acc_curve_100_10_2.png")
+png("data_clas/plots/acc_curve_100_10_2.png")
 # Plot the accuracy
 plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
-     xlab = "Epoch", ylab = "Loss", main = "Training and Validation Accuracy",
+     xlab = "Epoch", ylab = "Accuracy", main = "Training and Validation Accuracy",
      ylim = range(c(train_accuracy, valid_accuracy)))
 lines(1:length(valid_accuracy), valid_accuracy, type = "l", col = "red")
 legend("topright", legend = c("Training Accuracy", "Validation Accuracy"),
@@ -380,18 +380,7 @@ legend("topright", legend = c("Training Accuracy", "Validation Accuracy"),
 # Close the PNG device
 dev.off()
 
-# Plot the loss curve
-#plot(1:length(train_accuracy), train_accuracy, type = "l", col = "blue",
-#     xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
-#     ylim = range(c(train_accuracy, valid_accuracy)))
-#lines(1:length(valid_accuracy), valid_accuracy, type = "l", col = "red")
-#legend("topright", legend = c("Training Loss", "Validation Loss"),
-#       col = c("blue", "red"), lty = 1)
 
-
-torch_save(dnn, paste( "models/c02_DNN_500_10",sep="-"))
-cat(paste("\n Model dnn saved", sep = ""))
-cat("\nSaving model... Done.")
 
 
 dnn<-torch_load(paste( "data_clas/models/c02_DNN_500_10reescaled",sep="-"),device = device)
@@ -462,6 +451,7 @@ result <- Map("/", acc_list, total_list)
 
 
 result$timemin <- as.numeric(dnn_runtime)
+result$unit <- units(dnn_runtime)
 result$best_epoch<-best_epoch
 result$epoch<-epoch
 
@@ -470,11 +460,12 @@ print(result)
 #print("Accuray total Testing")
 #print(sum(unlist(acc_list))/sum(unlist(total_list)))
 
-write.csv(result, file = "Testing_results/dnn_500_10.csv", row.names = FALSE)
+write.csv(result, file = "data_clas/results/dnn_300_10.csv", row.names = FALSE)
 
 
 
 # Plot histograms
+png("data_clas/plots/hist_dnn.png")
 par(mfrow = c(2, 2)) # Adjust the layout based on your preferences
 
 categories <- c("crbd", "bisse", "ddd", "pld")
@@ -486,6 +477,16 @@ for (category in categories) {
        xlim = c(-0.5, 4.5),  # Adjust xlim to center bars
        breaks = -0.5:4.5)   # Adjust breaks to center bars
 }
+
+dev.off()
+
+# Convert Pred_conf to a matrix
+confusion_matrix <- do.call(rbind, Pred_conf)
+
+colnames(confusion_matrix) <- c("Predicted CRBD", "Predicted BiSSE", "Predicted DDD", "Predicted PLD")
+
+# Write the data frame to a CSV file
+write.csv(confusion_matrix, "data_clas/results/dnn_confmat.csv", row.names = TRUE)
 
 
 

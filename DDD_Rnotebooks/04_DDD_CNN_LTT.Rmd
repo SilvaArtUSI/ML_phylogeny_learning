@@ -38,6 +38,9 @@ model   <- "DDD"
 
 device <- "cuda"
 nn_type <- "cnn-ltt"
+
+lambda0_ddd <- c(0, 50) # speciation rate
+k_ddd	<- c(20,400)
 #lambda0 <- c(.5, 1.5) # speciation rate
 #mu      <- c(0.05,0.5) #  extinction rate
 #k	<-c(10,20)         # carrying Capacity
@@ -70,12 +73,23 @@ set.seed(113)
 
 phylo <- readRDS( paste(path_ddd,phylo_f,sep=""))
 true <- readRDS( paste(path_ddd,true_f,sep=""))
+true<-true[c(-4)]
+
+
+
+#normalize
+true[[1]]<-min_max_normalize(true[[1]],rang=lambda0_ddd)
+true[[2]]<-min_max_normalize(true[[2]],rang=lambda0_ddd)
+true[[3]]<-min_max_normalize(true[[3]],rang=k_ddd)
+#adjsuting parameters for better regresion.
 
 
 #true[[3]]<-true[[3]]/100
 #true[[4]]<-true[[4]]/100 #adjusting parameters
 
-true<-true[c(-4)] # Removing crown age from variables
+ # Removing crown age from variables
+
+
 
 
 ```
@@ -330,8 +344,8 @@ while (epoch < n_epochs & trigger < patience) {
   
 }
 end_time <- Sys.time()
-
-print(end_time - start_time)
+cnnltt_time<-end_time - start_time
+print(cnnltt_time)
 
 
 ```
@@ -339,7 +353,7 @@ print(end_time - start_time)
 ```{R, Loss Trainning vs Validations}
 
 # Plot the loss curve
-png("data_DDD/plots/loss_cnnlttcorr.png")
+png("data_DDD/plots/loss_cnnlttcorr_norm.png")
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
      ylim = range(c(train_losses, valid_losses)))
@@ -351,7 +365,21 @@ dev.off()
 
 ```
 
-## Saving the model
+```{R}
+cnnltt_time<-end_time - start_time
+result<-list("epoch"=epoch)
+result$best_epoch<-best_epoch
+
+result$timemin <- as.numeric(cnnltt_time)
+result$unit <- units(cnnltt_time)
+write.csv(result, file = "data_DDD/results/cnnltt_16_norm.csv", row.names = FALSE)
+# Print the result
+print(result)
+
+
+```
+
+## Loading best model
 
 ```{r,Storing the Model}
 
@@ -359,7 +387,7 @@ dev.off()
 cnn_ltt<-torch_load( paste( "data_DDD/models_DDD/04_CNNLTT","lay",n_layer,"hid",n_hidden="-"))
 cnn_ltt$to(device=device)
 
-cnn_ltt_time<-print(end_time - start_time)
+
 
 ```
 
@@ -367,15 +395,20 @@ cnn_ltt_time<-print(end_time - start_time)
 
 
 
-cnn_ltt$eval()
 
+rm(nn.pred)
+true <- readRDS( paste(path_ddd,true_f,sep=""))
+true<-true[c(-4)]
 nn.pred <- vector(mode = "list", length = n_out)
 names(nn.pred) <- names(true)
 
+
+cnn_ltt$eval()
+p_dropout=0
 # Compute predictions 
 coro::loop(for (b in test_dl) {
   #if (model_type == "crbd"){b$x <- b$x$unsqueeze(2)}
-  out <- cnn_ltt(b$x$to(device = "cpu"))
+  out <- cnn_ltt(b$x$to(device = device))
   pred <- as.numeric(out$to(device = "cpu")) # move the tensor to CPU 
   #true <- as.numeric(b$y)
   for (i in 1:n_out){nn.pred[[i]] <- c(nn.pred[[i]], pred[i])}
@@ -392,12 +425,21 @@ dpi=300
 
 factor=floor(dpi/150)
 
+#unnormalize
+
+
+#unnormalize
+nn.pred[[1]]<-min_max_unnormalize(nn.pred[[1]],rang=lambda0_ddd)
+nn.pred[[2]]<-min_max_unnormalize(nn.pred[[2]],rang=lambda0_ddd)
+nn.pred[[3]]<-min_max_unnormalize(nn.pred[[3]],rang=k_ddd)
+
+
 beta<-(true[[2]][test_indices]-true[[1]][test_indices])/true[[3]][test_indices]
 beta_pred<- (nn.pred[[2]] - nn.pred[[1]])/ nn.pred[[3]]
 
 
 
-png("data_DDD/plots/hist_cnnlttcorr.png", width = 480*3*factor, height = 480*factor,res=dpi)
+png("data_DDD/plots/hist_cnnlttcorrnomr.png", width = 480*3*factor, height = 480*factor,res=dpi)
 par(mfrow = c(1, 4))
 plot(true[[1]][test_indices], nn.pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
@@ -405,15 +447,12 @@ plot(true[[2]][test_indices], nn.pred[[2]], main = "mu", xlab = "True", ylab = "
 abline(0, 1,col="red")
 plot(true[[3]][test_indices] , nn.pred[[3]] , main = "K", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
-plot(beta , beta_pred , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.6,0.0))
+plot(beta , beta_pred , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.8,0),ylim=c(-.8,0))
 abline(0, 1,col="red")
 dev.off()
 ```
 
 
-
-
-p
 
 ```{R,computing RMSE}
 
@@ -428,6 +467,9 @@ for (i in 1:length(true))
 names(mse_l) <- names(true)
 
 mse_l$beta<-sqrt(mean((beta-beta_pred)^2))/abs(mean(beta))
+
+
+write.csv(mse_l, file = "data_DDD/results/cnnltt_16_norm.csv", row.names = FALSE)
 
 mse_l
 
@@ -465,22 +507,46 @@ for( i in 1:length(true)){
   
 }
 
+###for beta
+
+for (j in names(grouped_indices)) {
+    tree_indices <- grouped_indices[[j]]  # Get the tree indices for the current group
+    
+    # Get the values for the current name and tree indices
+    #values <- true[[i]][tree_indices]
+    
+    nrmse <- sqrt(mean((beta[tree_indices]-beta_pred[tree_indices])^2))/abs(mean(beta[tree_indices]))
+    
+    # Store the values in h
+    h$beta[[j]] <- nrmse
+    
+    }
+
+
+
+
+
 ```
 
 
 ## Plotting Tree Size vs NRMSE 
 ```{R, Plotting NRMSE Tree Size }
 # Scatter plot for each h[i]
+factor2=2
 for (i in 1:length(h)) {
   nrmse_values <- unlist(h[[i]])  # Get the NRMSE values for the current h[i]
   
   # Create a scatter plot
+  png(paste("data_DDD/plots/NRMSE_cnnlttcorrnomr",names(h)[i],".png",sep=""), 
+      width = floor(480*1.3*factor2), 
+      height = floor(480*factor2),
+      res=dpi)
+  
   plot(x = as.integer(names(h[[i]])),
        y = nrmse_values,
-       xlab = "Number of Nodes in Tree",
+       xlab = "Tree Size",
        ylab = "NRMSE",
-       main = paste("Scatter Plot of NRMSE -", names(h)[i]))
+       main = paste("NRMSE -", names(h)[i]))
+  dev.off()
 }
-
-
 ```

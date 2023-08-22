@@ -338,3 +338,27 @@ rescale_tree <- function(phy, new_crown_age = 1) {
 }
 
 
+min_max_normalize<-function(x,rang=1){
+  
+  if (length(rang)==1){ var<-(x -min(x))/(max(x)-min(x)) }
+  else{
+    
+    var<-(x-rang[1])/(rang[2]-rang[1])
+    
+  }
+  
+  return(var)
+  
+}
+
+min_max_unnormalize<-function(x,rang){
+  
+  var <- x*(rang[2]-rang[1])+rang[1]
+  
+  return (var)
+  
+}
+  
+  
+  
+

@@ -6,6 +6,9 @@ date: "2023-04-18"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+path_dir="~/Thesis/ML_phylogeny_learning"#windows
+knitr::opts_knit$set(root.dir =path_dir)
+
 ```
 
 
@@ -28,17 +31,23 @@ source("R/new_funcs.R")
 ```{R, Setting Enviroment}
 # Set parameters DDD model simulation
 set.seed(113)
-device = "cpu" # change if you want to compute GPUs
+device = "cuda" # change if you want to compute GPUs "cpu"
 
-n_trees <- 100000# number of trees to generate
-model   <- "DDD"
-lambda0 <- c(.5, 1.5) # speciation rate
-mu      <- c(0.05,0.5) #  extinction rate
+#n_trees <- 100000# number of trees to generate
+#model   <- "DDD"
+#lambda0 <- c(.5, 1.5) # speciation rate
+#mu      <- c(0.05,0.5) #  extinction rate
 #k	<-c(10,20)         # carrying Capacity
-k<- c(40,100)
+#k<- c(40,100)
  
-crown_age <- 15 
-dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter K (= diversity where speciation = extinction)
+#crown_age <- 15 
+#dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter K (= diversity where speciation = extinction)
+
+path_ddd<-"data_DDD/"
+#sumstat_f<-"phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-sumstat.rds"
+phylo_f<-"phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds"
+true_f<-"true-param-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10.rds"
+cbvl_f<-"phylogeny-DDD2-nt-10000-la0-0-50-mu-0-50-k-20-400-age-1-ddmod-10-cblv.rds"
 
 ```
 
@@ -47,23 +56,20 @@ dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter 
 ``` {R,Recoverying Parameters and Statistics}
 
 
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
-if( file.exists( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep="") )==TRUE){
-
-phylo <- readRDS( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep=""))
-true <- readRDS(paste("data/true-param-", model, "-",phylo_name,".rds", sep=""))
-
-true[[3]]<-true[[3]]/100
-true[[4]]<-true[[4]]/100
-
-true<-true[c(-4)] # Removing crown age from variables
+#phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
 
 
-  
-}else {
-  
-print("There is no phylogenetic tree with the  declared parameters")
-}
+phylo <- readRDS( paste(path_ddd,phylo_f,sep=""))
+true <- readRDS( paste(path_ddd,true_f,sep=""))
+true<-true[c(-4)]
+
+
+
+#normalize
+true[[1]]<-min_max_normalize(true[[1]],rang=lambda0_ddd)
+true[[2]]<-min_max_normalize(true[[2]],rang=lambda0_ddd)
+true[[3]]<-min_max_normalize(true[[3]],rang=k_ddd)
+
 ```
 
 ```{r}
@@ -81,24 +87,18 @@ max_nodes_rounded <- ceiling(max_nodes / 50) * 50
 
 ```{R}
 
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
 
-
-if( file.exists( paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds",sep=""))==FALSE){
+if( file.exists(paste(path_ddd,cbvl_f,sep=""))==FALSE){
 start_time <- Sys.time()
 
 cblv <- generate_encoding_DDD(phylo, tree_size = max_nodes_rounded)
 end_time <- Sys.time()
 print(end_time - start_time)
 
-saveRDS(cblv, paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds", sep=""))
-#additional tree info
-
-
+saveRDS(cblv,(paste(path_ddd,cbvl_f,sep="")))
 }else{
   print(paste("Tree from model: ",model,", already generated. Reading file",sep=""))
-  
-  cblv <- readRDS( paste("data/phylogeny-DDD","-",phylo_name,"-cblv.rds",sep=""))
+  cblv <- readRDS( (paste(path_ddd,cbvl_f,sep="")))
 }
 ```
 
@@ -242,6 +242,8 @@ trigger <- 0
 patience <- 10
 n_epochs <- 100
 last_loss <- 100
+best_loss<-100000
+best_epoch<-1000
 
 
 # Training loop 
@@ -282,6 +284,15 @@ while (epoch < n_epochs & trigger < patience) {
     last_loss <- current_loss
   }
   
+  if (current_loss< best_loss){
+    #save best model
+    
+    torch_save(cnn, paste( "data_DDD/models_DDD/04_CNN","lay",n_layer,"hid",n_hidden,sep="-"))
+    best_epoch<-epoch
+    best_loss<-current_loss
+    
+  }
+  
   cat(sprintf("epoch %0.3d/%0.3d - valid - loss: %3.5f \n", epoch, n_epochs, current_loss))
   
   train_losses <- c(train_losses, mean(train_loss))
@@ -299,33 +310,37 @@ print(end_time - start_time)
 ```{R}
 
 # Plot the loss curve
+png("data_DDD/plots/loss_cnn_norm.png")
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
      ylim = range(c(train_losses, valid_losses)))
 lines(1:length(valid_losses), valid_losses, type = "l", col = "red")
 legend("topright", legend = c("Training Loss", "Validation Loss"),
        col = c("blue", "red"), lty = 1)
+dev.off()
 
 
-```
-
-
-## Saving the model
-
-```{r,Storing the Model}
-
-torch_save(cnn, paste( "M03_CNN-DDD-K",k[1],k[2],
-                       subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-cat(paste("\n Model cnn saved", sep = ""))
-cat("\nSaving model... Done.")
-
-cnn<-torch_load( paste( "M03_CNN-DDD-K",k[1],k[2],
-                        subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
 
 ```
 ```{R}
-cnn<-torch_load( paste( "M03_CNN-DDD-K",k[1],k[2],
-                        subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
+cnn_time<-end_time - start_time
+result<-list("epoch"=epoch)
+result$best_epoch<-best_epoch
+
+result$timemin <- as.numeric(cnn_time)
+result$unit <- units(cnn_time)
+write.csv(result, file = "data_DDD/results/cnn_norm.csv", row.names = FALSE)
+# Print the resul
+print(result)
+
+
+```
+
+## restoring best  model
+
+```{r,Storing the Model}
+
+cnn<-torch_load( paste( "data_DDD/models_DDD/04_CNN","lay",n_layer,"hid",n_hidden,sep="-"))
 cnn$to(device=device)
 
 ```
@@ -336,14 +351,19 @@ Compute predicted parameters on test set.
 
 ```{R}
 cnn$eval()
-pred <- vector(mode = "list", length = n_out)
-names(pred) <- names(true)
+p_dropout=0
+
+rm(nn.pred)
+true <- readRDS( paste(path_ddd,true_f,sep=""))
+true<-true[c(-4)]
+nn.pred <- vector(mode = "list", length = n_out)
+names(nn.pred) <- names(true)
 
 # Compute predictions 
 coro::loop(for (b in test_dl) {
   out <- cnn(b$x$to(device = device))
   p <- as.numeric(out$to(device = "cpu")) # move the tensor to CPU 
-  for (i in 1:n_out){pred[[i]] <- c(pred[[i]], p[i])}
+  for (i in 1:n_out){nn.pred[[i]] <- c(nn.pred[[i]], p[i])}
 })
 ```
 
@@ -352,17 +372,35 @@ plot the predicted value by the neural network vs. the true values.
 
 ## Plots Prediction vs Predicted
 ```{R, Plots Prediciton vs Predicted}
-# Prepare plot 
-par(mfrow = c(1, 3))
+dpi=300
 
-plot(true[[1]][test_indices], pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
+factor=floor(dpi/150)
 
-plot(true[[2]][test_indices], pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
-abline(0, 1,col="red")
+#unnormalize
 
-plot(true[[3]][test_indices] * 100, pred[[3]] * 100, main = "K", xlab = "True", ylab = "Predicted")
+
+#unnormalize
+nn.pred[[1]]<-min_max_unnormalize(nn.pred[[1]],rang=lambda0_ddd)
+nn.pred[[2]]<-min_max_unnormalize(nn.pred[[2]],rang=lambda0_ddd)
+nn.pred[[3]]<-min_max_unnormalize(nn.pred[[3]],rang=k_ddd)
+
+
+beta<-(true[[2]][test_indices]-true[[1]][test_indices])/true[[3]][test_indices]
+beta_pred<- (nn.pred[[2]] - nn.pred[[1]])/ nn.pred[[3]]
+
+
+
+png("data_DDD/plots/cnn_estimated.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 4))
+plot(true[[1]][test_indices], nn.pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
+plot(true[[2]][test_indices], nn.pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(true[[3]][test_indices] , nn.pred[[3]] , main = "K", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(beta , beta_pred , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.8,0),ylim=c(-.8,0))
+abline(0, 1,col="red")
+dev.off()
 ```
 
 ```{R,computing RMSE}
@@ -371,11 +409,16 @@ mse_l <- list()
 
 for (i in 1:length(true))
 {
-  mse<- sqrt(mean((true[[i]][test_indices]-pred[[i]])^2))/mean(true[[i]][test_indices])
+  mse<- sqrt(mean((true[[i]][test_indices]-nn.pred[[i]])^2))/mean(true[[i]][test_indices])
   mse_l<-c(mse_l, mse)
 }
 
 names(mse_l) <- names(true)
+
+mse_l$beta<-sqrt(mean((beta-beta_pred)^2))/abs(mean(beta))
+
+
+write.csv(mse_l, file = "data_DDD/results/cnn_msel_norm.csv", row.names = FALSE)
 
 mse_l
 
@@ -384,9 +427,6 @@ mse_l
 
 
 ```{R,NRME against bucket, Only on testing}
-
-phylo_name<-fname_ddd(n_trees,lambda0,mu,k,crown_age,dd_model)
-phylo <- readRDS( paste("data/phylogeny-",model,"-",phylo_name,".rds",sep=""))
 
 # Get the Nnode values for each tree
 node_values <- sapply(phylo[test_indices], function(tree) tree$Nnode)
@@ -406,7 +446,7 @@ for( i in 1:length(true)){
     # Get the values for the current name and tree indices
     #values <- true[[i]][tree_indices]
     
-    nrmse <- sqrt(mean((true[[i]][test_indices][tree_indices]-pred[[i]][tree_indices])^2))/mean(true[[i]][test_indices][tree_indices])
+    nrmse <- sqrt(mean((true[[i]][test_indices][tree_indices]-nn.pred[[i]][tree_indices])^2))/mean(true[[i]][test_indices][tree_indices])
     
     # Store the values in h
     h[[i]][[j]] <- nrmse
@@ -416,22 +456,46 @@ for( i in 1:length(true)){
   
 }
 
+###for beta
+
+for (j in names(grouped_indices)) {
+    tree_indices <- grouped_indices[[j]]  # Get the tree indices for the current group
+    
+    # Get the values for the current name and tree indices
+    #values <- true[[i]][tree_indices]
+    
+    nrmse <- sqrt(mean((beta[tree_indices]-beta_pred[tree_indices])^2))/abs(mean(beta[tree_indices]))
+    
+    # Store the values in h
+    h$beta[[j]] <- nrmse
+    
+    }
+
+
+
+
+
 ```
 
 
 ## Plotting Tree Size vs NRMSE 
 ```{R, Plotting NRMSE Tree Size }
 # Scatter plot for each h[i]
+factor2=2
 for (i in 1:length(h)) {
   nrmse_values <- unlist(h[[i]])  # Get the NRMSE values for the current h[i]
   
   # Create a scatter plot
+  png(paste("data_DDD/plots/NRMSE_cnn_nomr",names(h)[i],".png",sep=""), 
+      width = floor(480*1.3*factor2), 
+      height = floor(480*factor2),
+      res=dpi)
+  
   plot(x = as.integer(names(h[[i]])),
        y = nrmse_values,
-       xlab = "Number of Nodes in Tree",
+       xlab = "Tree Size",
        ylab = "NRMSE",
-       main = paste("Scatter Plot of NRMSE -", names(h)[i]))
+       main = paste("NRMSE -", names(h)[i]))
+  dev.off()
 }
-
-
 ```

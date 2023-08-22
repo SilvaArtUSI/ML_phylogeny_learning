@@ -7,7 +7,8 @@
 
 
 #workingdirectory
-path_dir = "/Users/oasc/Documents/Thesis/ML_phylogeny_learning"
+#path_dir = "/Users/oasc/Documents/Thesis/ML_phylogeny_learning"
+path_dir="~/Thesis/ML_phylogeny_learning"
 
 knitr::opts_knit$set(root.dir =path_dir)
 ```
@@ -35,7 +36,7 @@ source( "R/new_funcs.R")
 n_trees <- 10000# number of trees to generate
 model   <- "DDD"
 
-device <- "cpu"
+device <- "cuda"
 nn_type <- "cnn-ltt"
 #lambda0 <- c(.5, 1.5) # speciation rate
 #mu      <- c(0.05,0.5) #  extinction rate
@@ -172,7 +173,7 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1,          shuffle=FALSE)
 
 ```{R}
 
-n_hidden  <- 8
+n_hidden  <- 16
 n_layer   <- 3
 ker_size  <- 5
 p_dropout <- 0.1 
@@ -303,9 +304,9 @@ while (epoch < n_epochs & trigger < patience) {
   # Early Stopping 
   if (current_loss > last_loss){trigger <- trigger + 1 
   
-  print(trigger)
   }else{
     last_loss <- current_loss
+    trigger<-0
   }
   
   
@@ -338,12 +339,14 @@ print(end_time - start_time)
 ```{R, Loss Trainning vs Validations}
 
 # Plot the loss curve
+png("data_DDD/plots/loss_cnnlttcorr.png")
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
      ylim = range(c(train_losses, valid_losses)))
 lines(1:length(valid_losses), valid_losses, type = "l", col = "red")
 legend("topright", legend = c("Training Loss", "Validation Loss"),
        col = c("blue", "red"), lty = 1)
+dev.off()
 
 
 ```
@@ -352,34 +355,27 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 
 ```{r,Storing the Model}
 
-torch_save(cnn_ltt, paste( "M04_CNNLTT-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-cat(paste("\n Model cnn ltt saved", sep = ""))
-cat("\nSaving model... Done.")
 
-cnn_ltt<-torch_load( paste( "M04_CNNLTT-DDD-",subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
-
-```
-
-
-```{R, For only loading the model}
-
-
-cnn_ltt<-torch_load( paste( "M04_CNNLTT-DDD-K",k[1],k[2],subset_size,"Lay",n_layer,"Hn",n_hidden,"ker",ker_size,"p",patience,sep="-"))
+cnn_ltt<-torch_load( paste( "data_DDD/models_DDD/04_CNNLTT","lay",n_layer,"hid",n_hidden="-"))
 cnn_ltt$to(device=device)
+
+cnn_ltt_time<-print(end_time - start_time)
 
 ```
 
 ```{R}
 
 
+
 cnn_ltt$eval()
+
 nn.pred <- vector(mode = "list", length = n_out)
 names(nn.pred) <- names(true)
 
 # Compute predictions 
 coro::loop(for (b in test_dl) {
   #if (model_type == "crbd"){b$x <- b$x$unsqueeze(2)}
-  out <- cnn_ltt(b$x$to(device = device))
+  out <- cnn_ltt(b$x$to(device = "cpu"))
   pred <- as.numeric(out$to(device = "cpu")) # move the tensor to CPU 
   #true <- as.numeric(b$y)
   for (i in 1:n_out){nn.pred[[i]] <- c(nn.pred[[i]], pred[i])}
@@ -390,23 +386,34 @@ coro::loop(for (b in test_dl) {
 
 ## Plots Prediction vs Predicted
 ```{R, Plots Prediciton vs Predicted}
-# Prepare plot 
-par(mfrow = c(1, 3))
+# Prepare plot }
 
+dpi=300
+
+factor=floor(dpi/150)
+
+beta<-(true[[2]][test_indices]-true[[1]][test_indices])/true[[3]][test_indices]
+beta_pred<- (nn.pred[[2]] - nn.pred[[1]])/ nn.pred[[3]]
+
+
+
+png("data_DDD/plots/hist_cnnlttcorr.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 4))
 plot(true[[1]][test_indices], nn.pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
-
 plot(true[[2]][test_indices], nn.pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
-
 plot(true[[3]][test_indices] , nn.pred[[3]] , main = "K", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
+plot(beta , beta_pred , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.6,0.0))
+abline(0, 1,col="red")
+dev.off()
 ```
 
 
 
 
-
+p
 
 ```{R,computing RMSE}
 
@@ -419,6 +426,8 @@ for (i in 1:length(true))
 }
 
 names(mse_l) <- names(true)
+
+mse_l$beta<-sqrt(mean((beta-beta_pred)^2))/abs(mean(beta))
 
 mse_l
 

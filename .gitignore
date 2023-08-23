@@ -1,7 +1,6 @@
 
 *.txt
 data_clas/*.rds
-models/*
 Plots/*
 Testing_results/*
 .Rhistory

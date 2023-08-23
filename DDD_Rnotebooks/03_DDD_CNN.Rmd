@@ -32,6 +32,8 @@ source("R/new_funcs.R")
 # Set parameters DDD model simulation
 set.seed(113)
 device = "cuda" # change if you want to compute GPUs "cpu"
+lambda0_ddd <- c(0, 50) # speciation rate
+k_ddd	<- c(20,400)
 
 #n_trees <- 100000# number of trees to generate
 #model   <- "DDD"

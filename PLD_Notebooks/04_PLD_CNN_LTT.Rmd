@@ -8,6 +8,7 @@
 
 #workingdirectory
 path_dir = "/Users/oasc/Documents/Thesis/ML_phylogeny_learning"
+path_dir="~/Thesis/ML_phylogeny_learning"#windows
 
 knitr::opts_knit$set(root.dir =path_dir)
 ```
@@ -35,12 +36,17 @@ source( "R/new_funcs.R")
 n_trees <- 10000# number of trees to generate
 model   <- "PLD"
 
-device <- "cpu"
+device <- "cuda"
 nn_type <- "cnn-ltt"
 #lambda0 <- c(.5, 1.5) # speciation rate
 #mu      <- c(0.05,0.5) #  extinction rate
 #k	<-c(10,20)         # carrying Capacity
 #k	<-c(40,100) 
+lambda0_pld <- c(0, 50) # speciation rate
+beta_n <-c(-2.5,0) 
+beta_p <-c(-2.5,2.5) 
+
+
  
 #crown_age <- 1 
 dd_model = 1 # dd_model = 1 linear dependence in speciation rate with parameter K (= diversity where speciation = extinction)
@@ -73,12 +79,14 @@ true <- readRDS( paste(path_ddd,true_f,sep=""))
 #true[[4]]<-true[[4]]/100 #adjusting parameters
 
 #true<-true[c(-4)] # Removing crown age from variables
+true <- readRDS( paste(path_ddd,true_f,sep=""))
 true$beta_n <- (true$mu-true$lambda0)/true$K
-
 true<-true[c(1,2,5,4)]
 
-true[[1]]<-true[[1]]/10
-true[[2]]<-true[[2]]/10
+true[[1]]<-min_max_normalize(true[[1]],rang=lambda0_ddd)
+true[[2]]<-min_max_normalize(true[[2]],rang=lambda0_ddd)
+true[[3]]<-min_max_normalize(true[[3]],rang=beta_n)
+true[[4]]<-min_max_normalize(true[[4]],rang=beta_p)
 ```
 
 
@@ -174,10 +182,10 @@ test_dl  <- test_ds  %>% dataloader(batch_size=1,          shuffle=FALSE)
 
 ```{R}
 
-n_hidden  <- 8
+n_hidden  <- 16
 n_layer   <- 3
 ker_size  <- 5
-p_dropout <- 0.01
+p_dropout <- 0.1
 n_input   <- max_nodes_rounded
 n_out     <- length(true)
 
@@ -335,12 +343,15 @@ end_time <- Sys.time()
 
 print(end_time - start_time)
 
+cnnltt_timepdl<-end_time - start_time
+
 
 ```
 ## Loss Plot 
 ```{R, Loss Trainning vs Validations}
 
 # Plot the loss curve
+png("data_PLD/plots/loss_cnnlttcorr_normpld.png")
 plot(1:length(train_losses), train_losses, type = "l", col = "blue",
      xlab = "Epoch", ylab = "Loss", main = "Training and Validation Loss",
      ylim = range(c(train_losses, valid_losses)))
@@ -348,8 +359,25 @@ lines(1:length(valid_losses), valid_losses, type = "l", col = "red")
 legend("topright", legend = c("Training Loss", "Validation Loss"),
        col = c("blue", "red"), lty = 1)
 
+dev.off()
+```
+
+## Loss Plot 
+```{R, Loss Trainning vs Validations}
+
+cnnltt_timepdl<-end_time - start_time
+result<-list("epoch"=epoch)
+result$best_epoch<-best_epoch
+
+result$timemin <- as.numeric(cnnltt_timepdl)
+result$unit <- units(cnnltt_timepdl)
+write.csv(result, file = "data_PLD/results/cnnltt_16_norm.csv", row.names = FALSE)
+# Print the result
+print(result)
 
 ```
+
+
 
 ## Saving the model
 
@@ -359,7 +387,7 @@ legend("topright", legend = c("Training Loss", "Validation Loss"),
 ```{R, For only loading the model}
 
 
-cnn_ltt<-torch_load( paste("data_PLD/models_pld/PLD_04_CNNLTT","lay",n_layer,"hid",n_hidden,sep="-"))
+cnn_ltt<-torch_load(  paste("data_PLD/models_pld/PLD_04_CNNLTT","lay",n_layer,"hid",n_hidden,sep="-"))
 cnn_ltt$to(device=device)
 
 ```
@@ -368,6 +396,12 @@ cnn_ltt$to(device=device)
 
 
 cnn_ltt$eval()
+p_dropout=0
+
+true <- readRDS( paste(path_ddd,true_f,sep=""))
+true$beta_n <- (true$mu-true$lambda0)/true$K
+true<-true[c(1,2,5,4)]
+
 nn.pred <- vector(mode = "list", length = n_out)
 names(nn.pred) <- names(true)
 
@@ -385,25 +419,33 @@ coro::loop(for (b in test_dl) {
 
 ## Plots Prediction vs Predicted
 ```{R, Plots Prediciton vs Predicted}
-# Prepare plot 
-dpi <- 300  # Adjust as needed
-width <- 10  # Adjust as needed (in inches)
-height <- 5  # Adjust as needed (in inches)
+# Prepare plot }
 
-# Start the PNG device with specified parameters
-png("Plots/cnnltt_truevspred.png", width = width, height = height, units = "in", res = dpi)
+dpi=300
 
+factor=floor(dpi/150)
+
+#unnormalize
+
+
+#unnormalize
+nn.pred[[1]]<-min_max_unnormalize(nn.pred[[1]],rang=lambda0_ddd)
+nn.pred[[2]]<-min_max_unnormalize(nn.pred[[2]],rang=lambda0_ddd)
+nn.pred[[3]]<-min_max_unnormalize(nn.pred[[3]],rang=beta_n)
+nn.pred[[4]]<-min_max_unnormalize(nn.pred[[4]],rang=beta_p)
+
+
+
+
+png("data_PLD/plots/cnnltt_estimates.png", width = 480*3*factor, height = 480*factor,res=dpi)
 par(mfrow = c(1, 4))
 plot(true[[1]][test_indices], nn.pred[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
-
 plot(true[[2]][test_indices], nn.pred[[2]], main = "mu", xlab = "True", ylab = "Predicted")
 abline(0, 1,col="red")
-
-plot(true[[3]][test_indices] , nn.pred[[3]] , main = "beta_n", xlab = "True", ylab = "Predicted")
+plot(true[[3]][test_indices] , nn.pred[[3]] , main = "Beta N", xlab = "True", ylab = "Predicted",xlim=c(-.8,0),ylim=c(-.8,0))
 abline(0, 1,col="red")
-
-plot(true[[4]][test_indices] , nn.pred[[4]] , main = "beta_p", xlab = "True", ylab = "Predicted")
+plot(true[[4]][test_indices] , nn.pred[[4]] , main = "Beta P", xlab = "True", ylab ="Predicted",)
 abline(0, 1,col="red")
 dev.off()
 ```
@@ -424,6 +466,9 @@ for (i in 1:length(true))
 }
 
 names(mse_l) <- names(true)
+
+write.csv(mse_l, file = "data_PLD/results/cnnltt_norm.csv", row.names = FALSE)
+
 
 mse_l
 
@@ -451,7 +496,7 @@ for( i in 1:length(true)){
     # Get the values for the current name and tree indices
     #values <- true[[i]][tree_indices]
     
-    nrmse <- sqrt(mean((true[[i]][test_indices][tree_indices]-nn.pred[[i]][tree_indices])^2))/mean(true[[i]][test_indices][tree_indices])
+    nrmse <- sqrt(mean((true[[i]][test_indices][tree_indices]-nn.pred[[i]][tree_indices])^2))/abs(mean(true[[i]][test_indices][tree_indices]))
     
     # Store the values in h
     h[[i]][[j]] <- nrmse
@@ -466,16 +511,22 @@ for( i in 1:length(true)){
 
 ## Plotting Tree Size vs NRMSE 
 ```{R, Plotting NRMSE Tree Size }
+factor2=2
 # Scatter plot for each h[i]
 for (i in 1:length(h)) {
   nrmse_values <- unlist(h[[i]])  # Get the NRMSE values for the current h[i]
   
   # Create a scatter plot
+  png(paste("data_PLD/plots/NRMSE_cnnlttcorrnomr",names(h)[i],".png",sep=""), 
+      width = floor(480*1.3*factor2), 
+      height = floor(480*factor2),
+      res=dpi)
   plot(x = as.integer(names(h[[i]])),
        y = nrmse_values,
        xlab = "Number of Nodes in Tree",
        ylab = "NRMSE",
-       main = paste("Scatter Plot of NRMSE -", names(h)[i]))
+       main = paste("NRMSE -", names(h)[i]),ylim=c(0,5))
+  dev.off()
 }
 
 

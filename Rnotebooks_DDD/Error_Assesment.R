@@ -186,8 +186,6 @@ dev.off()
 
 
 
-column_names <- c("lambda0", "mu", "K", "Beta_N")
-
 error_mle <- vector(mode = "list", length = 4)
 error_cnn <- vector(mode = "list", length = 4)
 error_cnnltt <- vector(mode = "list", length = 4)
@@ -198,8 +196,14 @@ for (i in 1:4){
   error_cnnltt[[i]] <- true[[i]]-nn.pred_ltt[[i]]
   error_cnn[[i]] <- true[[i]]-nn.pred_cnn[[i]]
   
-  }
+}
 
+error_mle <-error_mle[c(-3)]
+error_cnnltt <- error_cnnltt[c(-3)]
+error_cnn <- error_cnn[c(-3)]
+
+#column_names <- c("lambda0", "mu","K" ,"Beta_N")
+column_names <- c("lambda0", "mu", "Beta_N")
 # Convert list to dataframe with custom column names
 df.error_mle <- data.frame(error_mle,check.names = FALSE)
 colnames(df.error_mle) = column_names
@@ -212,19 +216,19 @@ colnames(df.error_cnn) = column_names
 
 
 # Print the resulting dataframe
-print(my_dataframe)
+#print(my_dataframe)
 
-df.error_nn$method = "NN"
-df.error_mle$method = "MLE"
+#df.error_nn$method = "NN"
+#df.error_mle$method = "MLE"
 
 lg = which(df.error_mle$lambda0 <  -100000)
-infinitesk = which(mle$K > 100000)
-rmoutliers= c(-lg,-infinitesk)
+#infinitesk = which(mle$K > 100000)
+#rmoutliers= c(-lg,-infinitesk)
+rmoutliers=c(-lg)
+#df.error=  rbind(df.error_nn[rmoutliers,],df.error_mle[rmoutliers,])
 
-df.error=  rbind(df.error_nn[rmoutliers,],df.error_mle[rmoutliers,])
 
-
-ggplot(df.error) + geom_point(aes(x=lambda0,y=mu,colour=method))+theme_minimal()
+#ggplot(df.error) + geom_point(aes(x=lambda0,y=mu,colour=method))+theme_minimal()
 
 
 
@@ -272,17 +276,186 @@ mle_vio<-ggplot(melted_data_mle, aes(x = variable, y = value, fill = variable)) 
 
 # Save the plot to a PNG file
 
-png("data_DDD/plots/violin_plotcnnltt.png", width = 1800, height = 1000,res=300)
+png("data_DDD/plots/violin_plotcnnltt_nonk.png", width = 1800, height = 800,res=300)
 print(cnnltt_vio)
 dev.off()
 
-png("data_DDD/plots/violin_plotcnn.png", width = 1800, height = 1000,res=300)
+png("data_DDD/plots/violin_plotcnn_nonk.png", width = 1800, height = 800,res=300)
 print(cnn_vio)
 dev.off()
 
-png("data_DDD/plots/violin_plotmle.png", width = 1800, height = 1000,res=300)
+png("data_DDD/plots/violin_plotmle_nonk.png", width = 1800, height = 800,res=300)
 print(mle_vio)
 dev.off()
+
+
+
+true_wo_k<-true[c(-3)]
+nn.pred_cnn_wo_k<-nn.pred_cnn[c(-3)]
+nn.pred_ltt_wo_k<-nn.pred_ltt[c(-3)]
+mle_wo_k<-mle[c(-3)]
+
+mse_cnn <- list()
+mse_cnnltt <- list()
+mse_mle<-list()
+
+for (i in 1:length(true_wo_k))
+{
+  s_mse_cnn<- sqrt(mean((true_wo_k[[i]][rmoutliers]-nn.pred_cnn_wo_k[[i]][rmoutliers])^2))/abs(mean(true_wo_k[[i]][rmoutliers]))
+  mse_cnn<-c(mse_cnn, s_mse_cnn)
+  
+  
+  s_mse_cnnltt<- sqrt(mean((true_wo_k[[i]][rmoutliers]-nn.pred_ltt_wo_k[[i]][rmoutliers])^2))/abs(mean(true_wo_k[[i]][rmoutliers]))
+  mse_cnnltt<-c(mse_cnnltt, s_mse_cnnltt)
+  
+  s_mse_mle<- sqrt(mean((true_wo_k[[i]][rmoutliers]-mle_wo_k[[i]][rmoutliers])^2))/abs(mean(true_wo_k[[i]][rmoutliers]))
+  mse_mle<-c(mse_mle, s_mse_mle)
+  
+
+}
+
+mse_vf<-rbind(mse_cnn,mse_cnnltt,mse_mle)
+
+colnames(mse_vf)<-column_names
+
+write.csv(mse_vf, file = "data_DDD/results/MSE_ALL_WOK_16_norm.csv", row.names = TRUE)
+
+
+
+
+#Plots
+###CNN
+png("data_DDD/plots/cnn_estimated_100_wok.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 3))
+plot(true[[1]], nn.pred_cnn[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(true[[2]], nn.pred_cnn[[2]], main = "mu", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(true[[4]]  ,  nn.pred_cnn[[4]] , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.6,0),ylim=c(-.6,0))
+abline(0, 1,col="red")
+dev.off()
+
+#Plots
+###CNNLTT
+png("data_DDD/plots/cnnltt_estimated_100_wok.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 3))
+plot(true[[1]], nn.pred_ltt[[1]], main = "lambda0", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(true[[2]], nn.pred_ltt[[2]], main = "mu", xlab = "True", ylab = "Predicted")
+abline(0, 1,col="red")
+plot(true[[4]]  ,  nn.pred_ltt[[4]] , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.6,0),ylim=c(-.6,0))
+abline(0, 1,col="red")
+dev.off()
+
+#Plots
+###MLE
+png("data_DDD/plots/mle_estimated_100_wok.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 3))
+plot(true[[1]], mle[[1]], main = "lambda0", xlab = "True", ylab = "Predicted",xlim=c(0,50),ylim=c(0,50))
+abline(0, 1,col="red")
+plot(true[[2]], mle[[2]], main = "mu", xlab = "True", ylab = "Predicted",xlim=c(0,50),ylim=c(0,50))
+abline(0, 1,col="red")
+plot(true[[4]] , mle[[4]] , main = "Beta", xlab = "True", ylab ="Predicted",xlim=c(-.6,0.0),ylim=c(-.6,0.0))
+abline(0, 1,col="red")
+dev.off()
+
+
+png("data_DDD/plots/cnnltt_mlevsnn.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 4))
+plot(nn.pred_ltt[[1]], mle[[1]], main = "lambda0", xlab = "CNN LTT", ylab = "MLE",xlim=c(0,50),ylim=c(0,50))
+abline(0, 1,col="red")
+plot(nn.pred_ltt[[2]], mle[[2]], main = "mu", xlab = "CNN LTT", ylab = "MLE",xlim=c(0,50),ylim=c(0,50))
+abline(0, 1,col="red")
+plot(nn.pred_ltt[[3]] , mle[[3]] , main = "K", xlab = "CNN LTT ", ylab = "MLE",xlim=c(0,400),ylim=c(0,400))
+abline(0, 1,col="red")
+plot(nn.pred_ltt[[4]] , mle[[4]] , main = "Beta", xlab = "CNN LTT", ylab ="MLE",xlim=c(-.6,0.0),ylim=c(-.6,0.0))
+abline(0, 1,col="red")
+dev.off()
+
+png("data_DDD/plots/cnn_mlevsnn_wok.png", width = 480*3*factor, height = 480*factor,res=dpi)
+par(mfrow = c(1, 4))
+plot(nn.pred_cnn[[1]], mle[[1]], main = "lambda0", xlab = "CNN", ylab = "MLE",xlim=c(0,50),ylim=c(0,50))
+abline(0, 1,col="red")
+plot(nn.pred_cnn[[2]], mle[[2]], main = "mu", xlab = "CNN", ylab = "MLE",xlim=c(0,50),ylim=c(0,50))
+abline(0, 1,col="red")
+plot(nn.pred_cnn[[3]] , mle[[3]] , main = "K", xlab = "CNN", ylab = "MLE",xlim=c(0,400),ylim=c(0,400))
+abline(0, 1,col="red")
+plot(nn.pred_cnn[[4]] , mle[[4]] , main = "Beta", xlab = "CNN", ylab ="MLE",xlim=c(-.6,0.0),ylim=c(-.6,0.0))
+abline(0, 1,col="red")
+dev.off()
+
+
+
+# Get the Nnode values for each tree
+node_values <- sapply(phylo, function(tree) tree$Nnode)
+
+# Group the indices based on the Nnode values
+grouped_indices <- split(seq_along(phylo), node_values)
+
+
+
+h_cnn <- list()
+h_cnnltt<-list()
+h_mle<-list()
+for( i in 1:length(true_wo_k)){
+  h_cnn[[names(true_wo_k[i])]] <- list()
+  h_cnnltt[[names(true_wo_k[i])]] <- list()
+  h_mle[[names(true_wo_k[i])]] <- list()
+  
+  
+  # Iterate over each group
+  for (j in names(grouped_indices)) {
+    tree_indices <- grouped_indices[[j]]  # Get the tree indices for the current group
+    
+    # Get the values for the current name and tree indices
+    #values <- true[[i]][tree_indices]
+    
+    nrmse_cnn <- sqrt(mean((true_wo_k[[i]][tree_indices]-nn.pred_cnn_wo_k[[i]][tree_indices])^2))/abs(mean(true_wo_k[[i]][tree_indices]))
+    nrmse_cnnltt <- sqrt(mean((true_wo_k[[i]][tree_indices]-nn.pred_ltt_wo_k[[i]][tree_indices])^2))/abs(mean(true_wo_k[[i]][tree_indices]))
+    nrmse_mle <- sqrt(mean((true_wo_k[[i]][tree_indices]-mle_wo_k[[i]][tree_indices])^2))/abs(mean(true_wo_k[[i]][tree_indices]))
+    
+    # Store the values in h
+    h_cnn[[i]][[j]] <- nrmse_cnn
+    h_cnnltt[[i]][[j]] <- nrmse_cnnltt
+    h_mle[[i]][[j]] <- nrmse_mle
+    
+    
+  }
+  
+  
+}
+
+factor2=2
+h_list<-list(h_cnn,h_cnnltt,h_mle)
+h_names<-c("CNN","CNN LTT","MLE")
+var_names<-c("lambda0","mu","beta N")
+j<-1
+for (h in h_list){
+  
+  png(paste("data_DDD/plots/NRMSE_mlw3",h_names[j],".png",sep=""),width=2500,height=1000, res=300)#,width = floor(480*1.3*factor2), height = floor(480*factor2),res=15)
+  par(mfrow = c(1, 3))
+  for (i in 1:length(h)) {
+    nrmse_values <- unlist(h[[i]])  # Get the NRMSE values for the current h[i]
+  
+       plot(x = as.integer(names(h[[i]])),
+        y = nrmse_values,
+       xlab = "Tree Size",
+       ylab = "NRMSE",
+       main = paste(var_names[i]),xlim=c(0,400),ylim=c(0,5))
+
+  }
+  dev.off()
+  
+  
+  
+  j<-j+1
+  
+  
+  }
+  
+  
+
+
 
 
 

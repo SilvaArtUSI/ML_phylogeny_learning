@@ -1,6 +1,6 @@
 ## ML_phylogeny_learning
 by Oscar Arturo Silva Castellanos
- Thesis project on classifying  and parameter estimationdifferent phylogeny models
+ Thesis project on classifying  and parameter estimation with different phylogeny models
  
 # Data Simulaton
 
@@ -8,6 +8,9 @@ For simulating Phylogenetic Trees the code can be found in the folder Rnotebooks
 
 Inside this folder the 001_All_trees_simulations.Rmd contains the code for simulating each different kind of trees (CRBD, BiSSE,DDD,LPD)
 CRBD and BiSSE can be reescaled to unitary trees with reescalingcrbd_bisse.R
+
+For downloading the sets created during my simulation enter here: 
+https://usi365-my.sharepoint.com/:f:/g/personal/silvaar_usi_ch/EmOvkKjlj-FBjJrj0JqEltUB5JeDRgf1yTJs79DfI2xgiA?e=Cic0WI
 
 
 # Neural Network Trainig - Classsifier
@@ -26,6 +29,7 @@ CRBD and BiSSE can be reescaled to unitary trees with reescalingcrbd_bisse.R
 
 1) The simulated data trees need to be saved in the folder data_clas. Im this case only The DDD trees are needed
 2) The Code for training each architecture is in the folder Rnoteboooks_LPD
+
 
 
 
